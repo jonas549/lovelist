@@ -1,0 +1,42 @@
+{% comment %}
+  Lovelist — botón de favoritos para la página de producto.
+
+  App block: el merchant lo arrastra donde quiera dentro del template de
+  producto. Solo pinta el marcado; quien lo hace funcionar es el JS del app
+  embed. Si el embed está apagado, el botón no aparece y no rompe nada.
+
+  Acá el ID del producto viene de Liquid, así que no hace falta resolverlo por
+  red como sí pasa en las tarjetas de colección.
+{% endcomment %}
+
+{% if product %}
+  {% assign variante = product.selected_or_first_available_variant %}
+  <div class="lovelist-boton-bloque" {{ block.shopify_attributes }}>
+    <button
+      type="button"
+      class="lovelist-corazon"
+      data-lovelist-boton
+      data-lovelist-producto="{{ product.id }}"
+      {% if variante %}data-lovelist-variante="{{ variante.id }}"{% endif %}
+      data-lovelist-handle="{{ product.handle }}"
+      aria-pressed="false"
+      aria-label="{{ 'lovelist.guardar' | t }}"
+    >
+      <span class="lovelist-icono" aria-hidden="true"></span>
+      <span class="lovelist-boton-texto" data-lovelist-texto>{{ 'lovelist.guardar' | t }}</span>
+    </button>
+  </div>
+{% endif %}
+
+{% schema %}
+{
+  "name": "Botón de favoritos",
+  "target": "section",
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "Requiere que el bloque \"Lovelist\" esté activado en Configuración del tema → Incrustaciones de aplicaciones."
+    }
+  ]
+}
+{% endschema %}

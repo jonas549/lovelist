@@ -26,14 +26,31 @@ entregas chicas y verificables que una grande que no sé por dónde probar.
 
 ---
 
-## Estado actual (Fase 1 — terminada)
+## Estado actual (Fases 1 y 2.1 — terminadas)
+
+**Fase 1 — cascarón desplegado**
 
 - App creada en Partner Dashboard, org `appsdevelopers`, handle `lovelist`
 - Desplegada en `https://lovelist-bay.vercel.app`
-- Base de datos Neon con `Session` y `Shop`
+- Base de datos Neon (PostgreSQL 17) con `Session` y `Shop`
 - App Proxy registrado en `/apps/lovelist` → `/proxy`
 - Validación HMAC del proxy verificada (8/8 casos)
 - Instalada y funcionando en `calendario-envios-test-final.myshopify.com`
+
+**Fase 2.1 — datos y API del proxy**
+
+- Modelos `Wishlist`, `WishlistItem`, `RateLimit`; `Shop.settings` y `Shop.uninstalledAt`
+- Los siete endpoints bajo `/proxy`, con firma verificada y propiedad comprobada
+  en cada operación
+- Topes activos: 20 listas por identidad, 200 items por lista, 60 escrituras por
+  minuto con limpieza oportunista de ventanas vencidas
+- Webhooks de privacidad borrando de verdad: `customers/redact`, `shop/redact`,
+  `customers/data_request` y `app/uninstalled`
+- Verificado contra Neon y contra el storefront real
+
+**Confirmado en la tienda de desarrollo:** el App Proxy reenvía `PATCH` y `DELETE`
+nativos. Se usan métodos HTTP normales; el respaldo `POST` + `_method` sigue
+aceptado en el servidor pero el storefront no lo necesita.
 
 ---
 
@@ -70,7 +87,7 @@ Vienen de otra app mía ya en producción. No cambiarlas sin avisarme primero.
 | Regla | Detalle |
 |---|---|
 | JavaScript del tema | **Vanilla JS.** Sin React, sin jQuery, sin frameworks |
-| Tamaño | El bundle del storefront debe quedar bajo 30 kB comprimido |
+| Tamaño | El bundle del storefront debe quedar bajo 30 kB comprimido. Shopify además limita a **10 kB comprimidos** el JS referenciado por el schema de un app block (documentado como *suggested*). Manda el más chico de los dos. Ojo: theme check aplica esa cifra sobre el archivo **crudo**, así que marca error mucho antes; el control real está en `scripts/build-theme.mjs` |
 | CSS | Todo prefijado con `lovelist-`. Cero estilos globales, cero `!important` salvo caso justificado y comentado |
 | API | **Todo pasa por el App Proxy.** Nunca exponer el dominio de Vercel en el código del tema |
 | Firma | Validar HMAC en **cada** request del proxy. Sin excepciones |

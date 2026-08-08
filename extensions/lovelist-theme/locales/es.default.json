@@ -1,0 +1,21 @@
+{
+  "lovelist": {
+    "guardar": "Guardar en favoritos",
+    "guardado": "Guardado en favoritos",
+    "quitar": "Quitar de favoritos",
+    "misFavoritos": "Mis favoritos",
+    "abrirFavoritos": "Abrir mis favoritos",
+    "cerrar": "Cerrar",
+    "vacio": "Todavía no guardaste nada.",
+    "vacioAyuda": "Tocá el corazón en cualquier producto para guardarlo acá.",
+    "cargando": "Cargando…",
+    "verProducto": "Ver producto",
+    "productoGuardado": "Producto guardado",
+    "noSePudoCargar": "No pudimos cargar este producto.",
+    "errorGuardar": "No pudimos guardar el producto. Intentá de nuevo.",
+    "errorQuitar": "No pudimos quitar el producto. Intentá de nuevo.",
+    "errorCargar": "No pudimos cargar tus favoritos.",
+    "listaLlena": "Esta lista llegó al máximo de productos.",
+    "demasiadoRapido": "Estás haciendo demasiados cambios muy rápido. Esperá un momento."
+  }
+}

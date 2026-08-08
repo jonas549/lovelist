@@ -1,0 +1,327 @@
+/**
+ * Lovelist — estilos del storefront.
+ *
+ * Todo va prefijado con `lovelist-`. Ni un selector de elemento suelto, ni una
+ * regla global: estamos dentro del tema de otra persona.
+ *
+ * Sin `!important` en todo el archivo. Si alguna vez hace falta, tiene que ir
+ * comentado explicando contra qué se pelea.
+ */
+
+.lovelist-corazon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+  padding: 0.5em;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: currentColor;
+  cursor: pointer;
+  line-height: 1;
+  transition: transform 0.12s ease, color 0.12s ease;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.lovelist-corazon svg {
+  width: 1.4em;
+  height: 1.4em;
+  display: block;
+}
+
+.lovelist-corazon:hover {
+  transform: scale(1.08);
+}
+
+.lovelist-corazon:active {
+  transform: scale(0.94);
+}
+
+.lovelist-corazon:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.lovelist-corazon.lovelist-activo {
+  color: #e0245e;
+}
+
+.lovelist-corazon[data-lovelist-ocupado] {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* Botón dentro de la página de producto (app block) */
+.lovelist-boton-bloque {
+  display: flex;
+  align-items: center;
+}
+
+.lovelist-boton-bloque .lovelist-corazon {
+  padding: 0.6em 1em;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+}
+
+.lovelist-boton-texto {
+  font-size: 0.95em;
+}
+
+/* Corazón inyectado sobre una tarjeta de colección */
+.lovelist-tarjeta-rel {
+  position: relative;
+}
+
+.lovelist-corazon-tarjeta {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.9);
+  color: #1a1a1a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+.lovelist-corazon-tarjeta:hover {
+  background: #fff;
+}
+
+/* Contador */
+.lovelist-contador {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  padding: 0.4em;
+  border: 0;
+  background: transparent;
+  color: currentColor;
+  cursor: pointer;
+  line-height: 1;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.lovelist-contador svg {
+  width: 1.35em;
+  height: 1.35em;
+  display: block;
+}
+
+.lovelist-contador-numero {
+  font-size: 0.75em;
+  min-width: 1.5em;
+  padding: 0.1em 0.35em;
+  border-radius: 999px;
+  background: #e0245e;
+  color: #fff;
+  text-align: center;
+}
+
+.lovelist-contador-vacio .lovelist-contador-numero {
+  background: #8a8a8a;
+}
+
+.lovelist-contador-flotante {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 2147483000;
+  padding: 0.75em;
+  border-radius: 999px;
+  background: #fff;
+  color: #1a1a1a;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* Drawer */
+.lovelist-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483001;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.lovelist-drawer-abierto {
+  visibility: visible;
+  opacity: 1;
+}
+
+.lovelist-drawer-fondo {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.lovelist-drawer-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(400px, 100%);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  color: #1a1a1a;
+  box-shadow: -2px 0 16px rgba(0, 0, 0, 0.2);
+  transform: translateX(100%);
+  transition: transform 0.22s ease;
+}
+
+.lovelist-drawer-abierto .lovelist-drawer-panel {
+  transform: translateX(0);
+}
+
+.lovelist-drawer-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #e5e5e5;
+}
+
+.lovelist-drawer-titulo {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.lovelist-drawer-cerrar {
+  border: 0;
+  background: transparent;
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  color: inherit;
+  padding: 0 0.25rem;
+}
+
+.lovelist-drawer-cuerpo {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem 1.25rem 1.25rem;
+}
+
+.lovelist-drawer-vacio {
+  padding: 2rem 0;
+  text-align: center;
+  color: #6b6b6b;
+  line-height: 1.5;
+}
+
+.lovelist-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.lovelist-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #efefef;
+}
+
+.lovelist-item-medio {
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
+  background: #f4f4f4;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.lovelist-item-medio img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.lovelist-item-datos {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.lovelist-item-titulo {
+  font-size: 0.92rem;
+  line-height: 1.3;
+  color: inherit;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.lovelist-item-titulo:hover {
+  text-decoration: underline;
+}
+
+.lovelist-item-precio {
+  font-size: 0.85rem;
+  color: #4a4a4a;
+}
+
+.lovelist-item-quitar {
+  border: 0;
+  background: transparent;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #6b6b6b;
+  padding: 0.25rem 0.4rem;
+}
+
+.lovelist-item-quitar:hover {
+  color: #1a1a1a;
+}
+
+/* Aviso de error */
+.lovelist-aviso {
+  position: fixed;
+  left: 50%;
+  bottom: 1.5rem;
+  transform: translate(-50%, 1rem);
+  z-index: 2147483002;
+  max-width: min(420px, calc(100vw - 2rem));
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  background: #1a1a1a;
+  color: #fff;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
+}
+
+.lovelist-aviso-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lovelist-corazon,
+  .lovelist-drawer,
+  .lovelist-drawer-panel,
+  .lovelist-aviso {
+    transition: none;
+  }
+
+  .lovelist-corazon:hover,
+  .lovelist-corazon:active {
+    transform: none;
+  }
+}

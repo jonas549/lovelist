@@ -1,0 +1,54 @@
+{% comment %}
+  Lovelist — app embed block.
+
+  Se activa desde el editor de temas y carga en todas las páginas. Trae el JS y
+  el CSS compartidos, el contador y el drawer. El botón de la página de producto
+  es un app block aparte, para que el merchant lo ponga donde quiera.
+
+  El JS y el CSS los declara el schema (`javascript` / `stylesheet`): Shopify los
+  inyecta con defer, así que no bloquean el render.
+
+  Acá no hay ninguna referencia al dominio de la app. Todo el tráfico sale hacia
+  /apps/lovelist, que es el App Proxy.
+{% endcomment %}
+
+<script type="application/json" id="lovelist-config">
+  {
+    "moneda": {{ shop.currency | json }},
+    "idioma": {{ request.locale.iso_code | json }},
+    "clienteConectado": {% if customer %}true{% else %}false{% endif %},
+    "textos": {
+      "guardar": {{ 'lovelist.guardar' | t | json }},
+      "guardado": {{ 'lovelist.guardado' | t | json }},
+      "quitar": {{ 'lovelist.quitar' | t | json }},
+      "misFavoritos": {{ 'lovelist.misFavoritos' | t | json }},
+      "abrirFavoritos": {{ 'lovelist.abrirFavoritos' | t | json }},
+      "cerrar": {{ 'lovelist.cerrar' | t | json }},
+      "vacio": {{ 'lovelist.vacio' | t | json }},
+      "vacioAyuda": {{ 'lovelist.vacioAyuda' | t | json }},
+      "cargando": {{ 'lovelist.cargando' | t | json }},
+      "productoGuardado": {{ 'lovelist.productoGuardado' | t | json }},
+      "noSePudoCargar": {{ 'lovelist.noSePudoCargar' | t | json }},
+      "errorGuardar": {{ 'lovelist.errorGuardar' | t | json }},
+      "errorQuitar": {{ 'lovelist.errorQuitar' | t | json }},
+      "errorCargar": {{ 'lovelist.errorCargar' | t | json }},
+      "listaLlena": {{ 'lovelist.listaLlena' | t | json }},
+      "demasiadoRapido": {{ 'lovelist.demasiadoRapido' | t | json }}
+    }
+  }
+</script>
+
+{% schema %}
+{
+  "name": "Lovelist",
+  "target": "body",
+  "javascript": "lovelist.js",
+  "stylesheet": "lovelist.css",
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "Activá este bloque para que Lovelist funcione en toda la tienda: el contador, el panel de favoritos y los corazones en las páginas de colección. El botón de la página de producto se agrega aparte, desde el bloque \"Botón de favoritos\"."
+    }
+  ]
+}
+{% endschema %}

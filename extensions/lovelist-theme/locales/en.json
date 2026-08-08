@@ -1,0 +1,21 @@
+{
+  "lovelist": {
+    "guardar": "Save to wishlist",
+    "guardado": "Saved to wishlist",
+    "quitar": "Remove from wishlist",
+    "misFavoritos": "My wishlist",
+    "abrirFavoritos": "Open my wishlist",
+    "cerrar": "Close",
+    "vacio": "You haven't saved anything yet.",
+    "vacioAyuda": "Tap the heart on any product to save it here.",
+    "cargando": "Loading…",
+    "verProducto": "View product",
+    "productoGuardado": "Saved product",
+    "noSePudoCargar": "We couldn't load this product.",
+    "errorGuardar": "We couldn't save the product. Please try again.",
+    "errorQuitar": "We couldn't remove the product. Please try again.",
+    "errorCargar": "We couldn't load your wishlist.",
+    "listaLlena": "This list reached its product limit.",
+    "demasiadoRapido": "You're making changes too quickly. Please wait a moment."
+  }
+}
