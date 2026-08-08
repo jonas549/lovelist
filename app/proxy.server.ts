@@ -277,11 +277,17 @@ export function buscarShop(dominio: string) {
   return prisma.shop.findUnique({ where: { domain: dominio } });
 }
 
-/** Para escrituras. La Fase 1 creó el modelo Shop pero nada escribía en él. */
+/**
+ * Para escrituras. La Fase 1 creó el modelo Shop pero nada escribía en él.
+ *
+ * Limpiamos `uninstalledAt` de paso: si el App Proxy sigue entregando
+ * peticiones es que la app está instalada, así que una marca vieja de
+ * desinstalación sería mentira. El upsert ya hacía un UPDATE: no cuesta nada.
+ */
 export function obtenerOCrearShop(dominio: string) {
   return prisma.shop.upsert({
     where: { domain: dominio },
-    update: {},
+    update: { uninstalledAt: null },
     create: { domain: dominio },
   });
 }
@@ -299,6 +305,33 @@ export function claveIdentidad(identidad: Identidad): string {
  * Limitación conocida: un invitado puede rotar su anonymousId y esquivar esto.
  * Frena el abuso accidental y el scripting ingenuo, no a un atacante decidido.
  */
+/**
+ * Limpieza oportunista de ventanas vencidas. Sin cron: aprovechamos que ya
+ * estamos tocando la tabla.
+ *
+ * Corre en una fracción de las escrituras y con LIMIT, para que el coste no
+ * dependa de cuánta basura se haya acumulado. Si falla, se avisa pero no se
+ * rompe la escritura del comprador: limpiar es mantenimiento, no su problema.
+ */
+const PROBABILIDAD_LIMPIEZA = 0.02;
+const MAX_FILAS_POR_LIMPIEZA = 200;
+
+async function limpiarVentanasVencidas(): Promise<void> {
+  try {
+    await prisma.$executeRaw`
+      DELETE FROM "RateLimit"
+      WHERE "key" IN (
+        SELECT "key" FROM "RateLimit"
+        WHERE "windowStart"
+              < now() - (${LIMITES.ventanaSegundos}::int * interval '1 second')
+        LIMIT ${MAX_FILAS_POR_LIMPIEZA}
+      )
+    `;
+  } catch (e) {
+    console.warn("[proxy] no se pudieron limpiar ventanas vencidas", e);
+  }
+}
+
 export async function consumirEscritura(
   shopId: string,
   identidad: Identidad,
@@ -321,7 +354,15 @@ export async function consumirEscritura(
   `;
 
   const usadas = Number(filas[0]?.count ?? 1);
+
+  if (Math.random() < PROBABILIDAD_LIMPIEZA) {
+    await limpiarVentanasVencidas();
+  }
+
   if (usadas > LIMITES.escriturasPorVentana) {
     throw new ErrorApi(429, "demasiadasEscrituras");
   }
 }
+
+/** Expuesta solo para poder probar la limpieza sin depender del azar. */
+export const _limpiarVentanasVencidas = limpiarVentanasVencidas;

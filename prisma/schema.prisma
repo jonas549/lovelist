@@ -43,6 +43,8 @@ model Shop {
   planActivatedAt DateTime?
   lastSyncAt      DateTime?
   settings        Json?
+  /// Lo marca el webhook app/uninstalled. Se limpia solo si la tienda vuelve.
+  uninstalledAt   DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -95,4 +97,7 @@ model RateLimit {
   key         String   @id
   windowStart DateTime @default(now())
   count       Int      @default(0)
+
+  /// Para que la limpieza oportunista de ventanas vencidas no escanee la tabla.
+  @@index([windowStart])
 }
