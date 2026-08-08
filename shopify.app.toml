@@ -1,0 +1,44 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "6b6447890b5972fb101a60cb7082e182"
+handle = "lovelist"
+name = "Lovelist"
+# TODO: reemplazar por el dominio real de Vercel cuando exista (aquí y en
+# [auth].redirect_urls y [app_proxy].url). `shopify app dev` sobreescribe
+# application_url temporalmente con el túnel; el valor de producción es el que
+# se publica con `shopify app deploy`.
+application_url = "https://lovelist.vercel.app"
+embedded = true
+
+[access_scopes]
+# Solo read_products. Al cliente logueado lo identificamos con el parámetro
+# logged_in_customer_id que inyecta el App Proxy, así que NO pedimos
+# read_customers y evitamos la aprobación de Protected Customer Data.
+scopes = "read_products"
+
+[app_proxy]
+prefix = "apps"
+subpath = "lovelist"
+url = "https://lovelist.vercel.app/proxy"
+
+[webhooks]
+api_version = "2026-10"
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = [ "app/uninstalled" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/scopes_update"
+  topics = [ "app/scopes_update" ]
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/gdpr"
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+
+[auth]
+redirect_urls = [ "https://lovelist.vercel.app/auth/callback" ]
+
+[build]
+include_config_on_deploy = true
+automatically_update_urls_on_dev = true
