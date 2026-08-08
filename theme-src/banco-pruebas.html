@@ -90,6 +90,13 @@
 
 <script>
   var SIN_ESTADO = /[?&]sin-estado/.test(location.search);
+  var LOGUEADO = /[?&]logueado/.test(location.search);
+  var MERGE_FALLA = /[?&]merge-falla/.test(location.search);
+  var ANON_SEMBRADO = "11111111-2222-4333-8444-555555555555";
+  if (LOGUEADO || MERGE_FALLA) {
+    // Como si hubiera guardado cosas de invitado y recien ahora iniciara sesion.
+    localStorage.setItem("lovelist_anonymous_id", ANON_SEMBRADO);
+  }
   var CACHE_INICIAL = Object.keys(JSON.parse(localStorage.getItem("lovelist_handles")||"{}")).length;
   var PEDIDOS = [], SEQ = 0;
   var IDS = { "dawn-uno": 111111, "dawn-dos": 222222, "simple-con-id": 778899,
@@ -113,6 +120,10 @@
       return j({ ok: true, lists: GUARDADOS.length
         ? [{ id: "l1", name: "Favoritos", isDefault: true, shareToken: null, shareUrl: null,
              itemCount: GUARDADOS.length, items: GUARDADOS.slice() }] : [] });
+    }
+    if (u.indexOf("/apps/lovelist/merge") === 0) {
+      if (MERGE_FALLA) return j({ ok: false, code: "errorInterno", message: "Algo salió mal." }, 500);
+      return j({ ok: true, listasMovidas: 1, listasFusionadas: 0, itemsMovidos: 2, itemsDuplicados: 0 });
     }
     if (u.indexOf("/apps/lovelist/items") === 0) {
       if (window.FALLAR_ESCRITURAS) return j({ ok: false, code: "errorInterno", message: "Algo salió mal." }, 500);
@@ -139,14 +150,23 @@
   window.addEventListener("error", function (e) { window.__errores.push(String(e.message)); });
 </script>
 
-<script type="application/json" id="lovelist-config">
-{ "moneda": "ARS", "idioma": "es", "clienteConectado": false,
-  "textos": { "guardar": "Guardar en favoritos", "quitar": "Quitar de favoritos",
-              "misFavoritos": "Mis favoritos", "abrirFavoritos": "Abrir mis favoritos",
-              "cerrar": "Cerrar", "vacio": "Todavía no guardaste nada.",
-              "vacioAyuda": "Tocá el corazón.", "cargando": "Cargando…",
-              "productoGuardado": "Producto guardado", "noSePudoCargar": "No pudimos cargarlo.",
-              "errorGuardar": "No pudimos guardar el producto. Intentá de nuevo.", "errorQuitar": "No pudimos quitar." } }
+<script>
+  // La config se arma acá y no como JSON estático porque `clienteConectado`
+  // cambia según el modo, y lovelist.js la lee al cargar.
+  var tagCfg = document.createElement("script");
+  tagCfg.type = "application/json";
+  tagCfg.id = "lovelist-config";
+  tagCfg.textContent = JSON.stringify({
+    moneda: "ARS", idioma: "es", clienteConectado: LOGUEADO || MERGE_FALLA,
+    textos: { guardar: "Guardar en favoritos", quitar: "Quitar de favoritos",
+              misFavoritos: "Mis favoritos", abrirFavoritos: "Abrir mis favoritos",
+              cerrar: "Cerrar", vacio: "Todavía no guardaste nada.",
+              vacioAyuda: "Tocá el corazón.", cargando: "Cargando…",
+              productoGuardado: "Producto guardado", noSePudoCargar: "No pudimos cargarlo.",
+              errorGuardar: "No pudimos guardar el producto. Intentá de nuevo.",
+              errorQuitar: "No pudimos quitar." }
+  });
+  document.head.appendChild(tagCfg);
 </script>
 
 <script src="/assets/lovelist.js"></script>
@@ -171,6 +191,46 @@ window.__resultado = null;
 
   (async function () {
     await esperar(2500);
+
+    if (LOGUEADO || MERGE_FALLA) {
+      var merges = PEDIDOS.filter(function (p) { return p.url.indexOf("/apps/lovelist/merge") === 0; });
+      var listados = PEDIDOS.filter(function (p) { return p.url.indexOf("/apps/lovelist/lists") === 0; });
+      out.push(MERGE_FALLA ? "=== FUSION QUE FALLA ===" : "=== FUSION AL INICIAR SESION ===");
+
+      ok("llama a /merge exactamente una vez", function () {
+        return { cond: merges.length === 1, extra: merges.length }; });
+      ok("manda el anonymousId que estaba guardado", function () {
+        var c = merges[0] ? JSON.parse(merges[0].body) : {};
+        return { cond: c.anonymousId === ANON_SEMBRADO, extra: JSON.stringify(c) }; });
+      ok("lee las listas DESPUES de fusionar, no antes", function () {
+        var iM = PEDIDOS.indexOf(merges[0]), iL = PEDIDOS.indexOf(listados[0]);
+        return { cond: iM >= 0 && iL > iM, extra: "merge=" + iM + " lists=" + iL }; });
+
+      if (MERGE_FALLA) {
+        ok("si falla CONSERVA el anonymousId para reintentar", function () {
+          var v = localStorage.getItem("lovelist_anonymous_id");
+          return { cond: v === ANON_SEMBRADO, extra: v }; });
+        ok("aun asi carga las listas del cliente", function () {
+          return { cond: listados.length >= 1, extra: listados.length }; });
+      } else {
+        ok("al salir bien BORRA el anonymousId", function () {
+          var v = localStorage.getItem("lovelist_anonymous_id");
+          return { cond: v === null, extra: v }; });
+        ok("y no crea uno nuevo al pedir las listas", function () {
+          var conAnon = listados.filter(function (p) { return /anonymousId=/.test(p.url); });
+          return { cond: localStorage.getItem("lovelist_anonymous_id") === null,
+                   extra: "peticiones con anonymousId=" + conAnon.length }; });
+      }
+
+      ok("cero errores de JS", function () {
+        return { cond: window.__errores.length === 0, extra: JSON.stringify(window.__errores) }; });
+
+      out.push("");
+      out.push(fallos === 0 ? "TODO OK" : fallos + " FALLOS");
+      document.getElementById("resultados").textContent = out.join("\n");
+      window.__resultado = out.join("\n");
+      return;
+    }
 
     if (SIN_ESTADO) {
       out.push("=== MODO SIN ESTADO PREVIO ===");

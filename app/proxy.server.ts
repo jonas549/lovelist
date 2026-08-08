@@ -178,6 +178,10 @@ export type ContextoProxy = {
 /** Forma de UUID (RFC 4122). No exigimos la versión: alcanza con acotar la clave. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+export function esUuid(valor: unknown): valor is string {
+  return typeof valor === "string" && UUID.test(valor);
+}
+
 async function leerCuerpo(request: Request): Promise<Record<string, unknown>> {
   if (request.method === "GET" || request.method === "HEAD") return {};
   const crudo = await request.text();

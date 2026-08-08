@@ -6,6 +6,7 @@ import {
   ErrorApi,
   LIMITES,
   RUTA_PROXY_PUBLICA,
+  esUuid,
   type Identidad,
 } from "./proxy.server";
 
@@ -276,6 +277,135 @@ export async function quitarItem(
 
   await prisma.wishlistItem.delete({ where: { id: item.id } });
   return { itemId: item.id, listId: item.wishlistId };
+}
+
+/** Clave de igualdad de un item. Espeja el índice único con NULLS NOT DISTINCT. */
+function claveItem(i: { productId: string; variantId: string | null }): string {
+  return i.productId + "|" + (i.variantId ?? "");
+}
+
+export type ResultadoFusion = {
+  listasMovidas: number;
+  listasFusionadas: number;
+  itemsMovidos: number;
+  itemsDuplicados: number;
+};
+
+/**
+ * Fusiona las listas de un invitado con las del cliente que acaba de iniciar
+ * sesión. Fusiona, nunca reemplaza: lo que el cliente ya tenía no se toca.
+ *
+ * Empareja por nombre. Si el cliente no tiene una lista con ese nombre, la
+ * lista anónima se le reasigna en vez de copiarse: así conserva su id, sus
+ * items y —lo que importa— su shareToken, de modo que un link que el invitado
+ * ya había compartido sigue funcionando después de que se registre.
+ *
+ * Idempotente: al terminar no quedan listas anónimas, así que una segunda
+ * corrida no encuentra nada que hacer.
+ *
+ * Los duplicados se detectan comparando en memoria contra los items que ya
+ * tiene el destino, y no dejando que salte el índice único. Dentro de una
+ * transacción de Postgres, capturar el error de unicidad deja la transacción
+ * abortada y todo lo que sigue falla.
+ *
+ * No aplicamos los topes de listas ni de items: recortar acá sería perder
+ * favoritos del comprador en el momento en que se registra, que es justo cuando
+ * más confianza nos está dando. El resultado puede quedar por encima del tope;
+ * los topes vuelven a aplicar en la siguiente creación, así que el estado se
+ * corrige solo y está acotado (nunca más del doble).
+ */
+export async function fusionarInvitado(
+  shopId: string,
+  customerId: string,
+  anonymousIdCrudo: unknown,
+): Promise<ResultadoFusion> {
+  if (!esUuid(anonymousIdCrudo)) {
+    throw new ErrorApi(400, "identidadInvalida");
+  }
+  const anonymousId = anonymousIdCrudo.toLowerCase();
+
+  return prisma.$transaction(
+    async (tx) => {
+      const anonimas = await tx.wishlist.findMany({
+        where: { shopId, anonymousId, customerId: null },
+        include: { items: true },
+        orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+      });
+
+      const resultado: ResultadoFusion = {
+        listasMovidas: 0,
+        listasFusionadas: 0,
+        itemsMovidos: 0,
+        itemsDuplicados: 0,
+      };
+      if (!anonimas.length) return resultado;
+
+      const delCliente = await tx.wishlist.findMany({
+        where: { shopId, customerId, anonymousId: null },
+        include: { items: { select: { productId: true, variantId: true } } },
+      });
+
+      // Índice de destinos: por nombre, y aparte cuál es la predeterminada.
+      const porNombre = new Map<string, { id: string; claves: Set<string> }>();
+      let predeterminada: { id: string; claves: Set<string> } | null = null;
+
+      for (const l of delCliente) {
+        const entrada = { id: l.id, claves: new Set(l.items.map(claveItem)) };
+        porNombre.set(l.name, entrada);
+        if (l.isDefault) predeterminada = entrada;
+      }
+
+      for (const anon of anonimas) {
+        const destino = anon.isDefault
+          ? predeterminada ?? porNombre.get(anon.name) ?? null
+          : porNombre.get(anon.name) ?? null;
+
+        if (!destino) {
+          // No hay con qué fusionarla: se la reasignamos tal cual.
+          await tx.wishlist.update({
+            where: { id: anon.id },
+            data: { customerId, anonymousId: null },
+          });
+          const entrada = {
+            id: anon.id,
+            claves: new Set(anon.items.map(claveItem)),
+          };
+          porNombre.set(anon.name, entrada);
+          if (anon.isDefault && !predeterminada) predeterminada = entrada;
+          resultado.listasMovidas++;
+          continue;
+        }
+
+        const aMover: string[] = [];
+        for (const item of anon.items) {
+          const clave = claveItem(item);
+          if (destino.claves.has(clave)) {
+            resultado.itemsDuplicados++;
+            continue; // se va con la lista anónima al borrarla
+          }
+          destino.claves.add(clave);
+          aMover.push(item.id);
+        }
+
+        if (aMover.length) {
+          // Un updateMany por lista y no uno por item: con 20 listas de 200
+          // items, ir de a uno se pasaría del tiempo máximo de la transacción.
+          await tx.wishlistItem.updateMany({
+            where: { id: { in: aMover } },
+            data: { wishlistId: destino.id },
+          });
+          resultado.itemsMovidos += aMover.length;
+        }
+
+        // Los duplicados que quedaron caen por onDelete: Cascade.
+        await tx.wishlist.delete({ where: { id: anon.id } });
+        resultado.listasFusionadas++;
+      }
+
+      return resultado;
+    },
+    { timeout: 15000 },
+  );
 }
 
 /**

@@ -7,10 +7,12 @@
  * simula varias formas de tarjeta de tema, un header estilo Dawn y la red, y
  * corre sus comprobaciones sola: el resultado queda en pantalla.
  *
- * Tres modos, y hay que pasar por los tres:
- *   /                 primera visita, caché frío
- *   /  (recargando)   segunda visita, caché tibio: debe pintar sin pedir red
+ * Modos, y hay que pasar por todos:
+ *   /                 invitado, primera visita, caché frío
+ *   /  (recargando)   invitado, caché tibio: debe pintar sin pedir red
  *   /?sin-estado      sin nada guardado: no debe gastar ni una petición
+ *   /?logueado        con sesión iniciada y favoritos de invitado: debe fusionar
+ *   /?merge-falla     la fusión falla: debe conservar el anonymousId y reintentar
  *
  * Por qué existe: la primera versión de este banco daba todo en verde y aun así
  * se escaparon tres fallos a producción (los corazones no recordaban nada, el

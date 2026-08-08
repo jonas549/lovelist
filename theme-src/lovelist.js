@@ -100,6 +100,17 @@
     return v;
   }
 
+  /**
+   * Con sesión iniciada quien dice quién sos es el App Proxy, así que no
+   * inventamos un UUID nuevo solo para acompañar la petición: mandamos el que
+   * hubiera, y si no hay, nada. Crear uno acá dejaría basura en localStorage
+   * justo después de haberlo limpiado al fusionar.
+   */
+  function idParaEnviar() {
+    if (cfg.clienteConectado) return almacen.getItem(LS_ID) || "";
+    return idAnonimo();
+  }
+
   function aGid(id) {
     var s = String(id == null ? "" : id).trim();
     if (!s) return "";
@@ -176,14 +187,18 @@
     var url = RUTA + ruta;
     var init = { method: metodo, headers: {}, credentials: "same-origin" };
 
+    var identidad = idParaEnviar();
+
     if (metodo === "GET") {
-      url +=
-        (url.indexOf("?") === -1 ? "?" : "&") +
-        "anonymousId=" +
-        encodeURIComponent(idAnonimo());
+      if (identidad) {
+        url +=
+          (url.indexOf("?") === -1 ? "?" : "&") +
+          "anonymousId=" +
+          encodeURIComponent(identidad);
+      }
     } else {
       var cuerpo = opciones.body || {};
-      cuerpo.anonymousId = idAnonimo();
+      if (identidad && !cuerpo.anonymousId) cuerpo.anonymousId = identidad;
       init.headers["Content-Type"] = "application/json";
       init.body = JSON.stringify(cuerpo);
     }
@@ -260,6 +275,41 @@
 
   function registrar(mensaje, e) {
     if (window.console && console.warn) console.warn("[Lovelist] " + mensaje, e || "");
+  }
+
+  /**
+   * Une lo que el visitante guardó como invitado con su cuenta, la primera vez
+   * que lo vemos con sesión iniciada.
+   *
+   * Se corre ANTES de leer las listas, para no llegar a pintar el estado de
+   * antes de la fusión. Si falla, conservamos el anonymousId a propósito: es la
+   * única llave que queda hacia esos favoritos, y el próximo intento reintenta.
+   * Borrarlo ante un error sería tirar los datos del comprador.
+   */
+  function fusionarSiHaceFalta() {
+    if (!cfg.clienteConectado) return Promise.resolve();
+
+    var anonimo = almacen.getItem(LS_ID);
+    if (!anonimo) return Promise.resolve();
+
+    return api("/merge", { method: "POST", body: { anonymousId: anonimo } })
+      .then(function (r) {
+        almacen.removeItem(LS_ID);
+        if (r.listasMovidas || r.listasFusionadas) {
+          registrar(
+            "favoritos de invitado unidos a la cuenta: " +
+              r.listasMovidas +
+              " movidas, " +
+              r.listasFusionadas +
+              " fusionadas, " +
+              r.itemsMovidos +
+              " items",
+          );
+        }
+      })
+      .catch(function (e) {
+        registrar("no se pudo unir los favoritos de invitado", e);
+      });
   }
 
   // -------------------------------------------------------------------------
@@ -1046,7 +1096,7 @@
         });
       }
 
-      cargar();
+      fusionarSiHaceFalta().then(cargar);
     } catch (e) {
       registrar("no se pudo iniciar", e);
     }

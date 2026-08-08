@@ -35,6 +35,7 @@ export const es = {
     nombreMuyLargo: "El nombre de la lista es demasiado largo.",
     productoRequerido: "Falta indicar el producto.",
     noSePuedeBorrarPredeterminada: "No podés borrar tu lista de favoritos.",
+    fusionSinSesion: "Necesitás iniciar sesión para unir tus favoritos.",
     demasiadasListas: "Llegaste al máximo de listas.",
     listaLlena: "Esta lista llegó al máximo de productos.",
     demasiadasEscrituras:

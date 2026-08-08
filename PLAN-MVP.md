@@ -26,7 +26,7 @@ entregas chicas y verificables que una grande que no sé por dónde probar.
 
 ---
 
-## Estado actual (Fases 1 y 2.1 — terminadas)
+## Estado actual (Fases 1, 2.1 y 2.2 — terminadas)
 
 **Fase 1 — cascarón desplegado**
 
@@ -48,9 +48,25 @@ entregas chicas y verificables que una grande que no sé por dónde probar.
   `customers/data_request` y `app/uninstalled`
 - Verificado contra Neon y contra el storefront real
 
+**Fase 2.2 — theme app extension**
+
+- App embed block con el JS y el CSS compartidos, el contador y el drawer
+- App block aparte para el botón de la página de producto
+- Inyección de corazones en tarjetas de colección sin depender de clases de tema,
+  con `MutationObserver` para carga infinita y filtros AJAX
+- Caché persistente `handle → productId` en `localStorage`: sin ella los corazones
+  no podrían pintarse al cargar, porque la base guarda IDs y el marcado del tema
+  solo trae el handle
+- Verificado en Dawn real: colección, home, header y banner
+- Banco de pruebas versionado en `theme-src/banco-pruebas.html` (`npm run test:theme`),
+  36 comprobaciones en tres modos
+
 **Confirmado en la tienda de desarrollo:** el App Proxy reenvía `PATCH` y `DELETE`
 nativos. Se usan métodos HTTP normales; el respaldo `POST` + `_method` sigue
 aceptado en el servidor pero el storefront no lo necesita.
+
+**Al probar cambios del storefront: recarga forzada (Ctrl+F5).** El CDN de Shopify
+sirve el asset viejo durante un rato y parece un fallo de la app.
 
 ---
 
