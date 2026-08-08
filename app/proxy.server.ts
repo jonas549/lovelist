@@ -1,10 +1,29 @@
 import crypto from "node:crypto";
 
+import prisma from "./db.server";
+import { t } from "./i18n";
+
 /**
  * Tolerancia de reloj para el parámetro `timestamp`, en segundos.
  * Mismo valor que usa @shopify/shopify-api internamente. Evita replays.
  */
 const TOLERANCIA_TIMESTAMP_SEG = 90;
+
+/** Debe coincidir con [app_proxy] prefix/subpath de shopify.app.toml. */
+export const RUTA_PROXY_PUBLICA = "/apps/lovelist";
+
+export const LIMITES = {
+  /** Escrituras por identidad y por ventana. */
+  escriturasPorVentana: 60,
+  ventanaSegundos: 60,
+  listasPorIdentidad: 20,
+  itemsPorLista: 200,
+  largoNombreLista: 60,
+} as const;
+
+// ---------------------------------------------------------------------------
+// Firma del App Proxy
+// ---------------------------------------------------------------------------
 
 export type MotivoRechazo =
   | "sin_firma"
@@ -86,27 +105,223 @@ export function verificarFirmaProxy(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Respuestas
+// ---------------------------------------------------------------------------
+
+type ClaveError = keyof typeof import("./i18n").es.api;
+
+/** Error de API que se convierte en una Response JSON con mensaje en español. */
+export class ErrorApi extends Error {
+  readonly status: number;
+  readonly codigo: ClaveError;
+
+  constructor(status: number, codigo: ClaveError) {
+    super(codigo);
+    this.status = status;
+    this.codigo = codigo;
+    this.name = "ErrorApi";
+  }
+
+  aResponse(): Response {
+    return json(
+      { ok: false, code: this.codigo, message: t(`api.${this.codigo}`) },
+      this.status,
+    );
+  }
+}
+
+export function json(cuerpo: unknown, status = 200): Response {
+  return new Response(JSON.stringify(cuerpo), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      // Las respuestas dependen de la identidad del visitante: nunca cachear.
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
 /**
- * Valida la firma y devuelve el contexto del proxy.
- * Lanza una Response 401 (JSON) si no valida.
+ * Envuelve un handler del proxy para que cualquier ErrorApi salga como JSON en
+ * español y cualquier otra excepción salga como 500 sin filtrar detalles.
+ * Nada de `catch` que solo hace console.error y sigue.
+ */
+export async function manejar(
+  fn: () => Promise<Response>,
+): Promise<Response> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (e instanceof ErrorApi) return e.aResponse();
+    if (e instanceof Response) return e;
+    console.error("[proxy] error no controlado", e);
+    return new ErrorApi(500, "errorInterno").aResponse();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Contexto del request
+// ---------------------------------------------------------------------------
+
+export type Identidad =
+  | { tipo: "cliente"; customerId: string }
+  | { tipo: "invitado"; anonymousId: string };
+
+export type ContextoProxy = {
+  shopDominio: string;
+  identidad: Identidad;
+  metodo: string;
+  cuerpo: Record<string, unknown>;
+};
+
+/** Forma de UUID (RFC 4122). No exigimos la versión: alcanza con acotar la clave. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function leerCuerpo(request: Request): Promise<Record<string, unknown>> {
+  if (request.method === "GET" || request.method === "HEAD") return {};
+  const crudo = await request.text();
+  if (!crudo.trim()) return {};
+  try {
+    const parseado: unknown = JSON.parse(crudo);
+    if (!parseado || typeof parseado !== "object" || Array.isArray(parseado)) {
+      throw new ErrorApi(400, "cuerpoInvalido");
+    }
+    return parseado as Record<string, unknown>;
+  } catch (e) {
+    if (e instanceof ErrorApi) throw e;
+    throw new ErrorApi(400, "cuerpoInvalido");
+  }
+}
+
+/**
+ * Método real de la petición.
+ *
+ * La doc de Shopify no dice qué métodos reenvía el App Proxy. GET y POST son
+ * seguros; de PATCH no encontramos confirmación. Por eso aceptamos también
+ * POST con `_method` en el cuerpo, para poder cambiar de estrategia en el
+ * storefront sin tocar el servidor.
+ */
+function metodoEfectivo(
+  request: Request,
+  cuerpo: Record<string, unknown>,
+): string {
+  const metodo = request.method.toUpperCase();
+  if (metodo !== "POST") return metodo;
+  const override = cuerpo._method;
+  if (typeof override === "string") {
+    const normalizado = override.toUpperCase();
+    if (["PATCH", "PUT", "DELETE"].includes(normalizado)) return normalizado;
+  }
+  return metodo;
+}
+
+function resolverIdentidad(
+  url: URL,
+  loggedInCustomerId: string | null,
+  cuerpo: Record<string, unknown>,
+): Identidad {
+  if (loggedInCustomerId) {
+    return { tipo: "cliente", customerId: loggedInCustomerId };
+  }
+
+  // Los GET no llevan cuerpo, así que el invitado se identifica por query.
+  const delCuerpo = cuerpo.anonymousId;
+  const crudo =
+    typeof delCuerpo === "string" && delCuerpo
+      ? delCuerpo
+      : url.searchParams.get("anonymousId");
+
+  if (!crudo) throw new ErrorApi(400, "identidadFaltante");
+  if (!UUID.test(crudo)) throw new ErrorApi(400, "identidadInvalida");
+
+  return { tipo: "invitado", anonymousId: crudo.toLowerCase() };
+}
+
+/**
+ * Valida la firma, resuelve identidad y método. Lanza ErrorApi si algo falla.
  *
  * `logged_in_customer_id` lo inyecta Shopify cuando hay un cliente con sesión
  * iniciada en el storefront; va vacío si el visitante es anónimo. Por eso NO
  * necesitamos el scope read_customers para identificar al cliente.
+ *
+ * Nota de seguridad: el `anonymousId` lo genera y envía el propio cliente, así
+ * que es un portador (bearer). La firma del proxy prueba que la petición pasó
+ * por Shopify, no que quien la manda sea dueño de ese UUID. Es aceptable porque
+ * son 122 bits al azar, pero hay que tratarlo como secreto.
  */
-export function authenticateProxy(request: Request): {
-  shop: string;
-  loggedInCustomerId: string | null;
-} {
-  const resultado = verificarFirmaProxy(new URL(request.url));
+export async function autenticarProxy(request: Request): Promise<ContextoProxy> {
+  const url = new URL(request.url);
+  const firma = verificarFirmaProxy(url);
 
-  if (!resultado.valido) {
-    throw new Response(
-      JSON.stringify({ ok: false, error: resultado.motivo }),
-      { status: 401, headers: { "Content-Type": "application/json" } },
-    );
+  if (!firma.valido) {
+    throw new ErrorApi(401, "firmaInvalida");
   }
 
-  const { shop, loggedInCustomerId } = resultado;
-  return { shop, loggedInCustomerId };
+  const cuerpo = await leerCuerpo(request);
+
+  return {
+    shopDominio: firma.shop,
+    identidad: resolverIdentidad(url, firma.loggedInCustomerId, cuerpo),
+    metodo: metodoEfectivo(request, cuerpo),
+    cuerpo,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tienda y límite de escrituras
+// ---------------------------------------------------------------------------
+
+/** Solo lectura: los GET no deben crear nada. */
+export function buscarShop(dominio: string) {
+  return prisma.shop.findUnique({ where: { domain: dominio } });
+}
+
+/** Para escrituras. La Fase 1 creó el modelo Shop pero nada escribía en él. */
+export function obtenerOCrearShop(dominio: string) {
+  return prisma.shop.upsert({
+    where: { domain: dominio },
+    update: {},
+    create: { domain: dominio },
+  });
+}
+
+export function claveIdentidad(identidad: Identidad): string {
+  return identidad.tipo === "cliente"
+    ? `c:${identidad.customerId}`
+    : `a:${identidad.anonymousId}`;
+}
+
+/**
+ * Ventana fija por identidad, resuelta en un solo statement atómico para que
+ * dos instancias de Vercel no puedan pisarse el contador.
+ *
+ * Limitación conocida: un invitado puede rotar su anonymousId y esquivar esto.
+ * Frena el abuso accidental y el scripting ingenuo, no a un atacante decidido.
+ */
+export async function consumirEscritura(
+  shopId: string,
+  identidad: Identidad,
+): Promise<void> {
+  const clave = `${shopId}:${claveIdentidad(identidad)}`;
+
+  const filas = await prisma.$queryRaw<{ count: number }[]>`
+    INSERT INTO "RateLimit" ("key", "windowStart", "count")
+    VALUES (${clave}, now(), 1)
+    ON CONFLICT ("key") DO UPDATE SET
+      "windowStart" = CASE
+        WHEN "RateLimit"."windowStart"
+             < now() - (${LIMITES.ventanaSegundos}::int * interval '1 second')
+        THEN now() ELSE "RateLimit"."windowStart" END,
+      "count" = CASE
+        WHEN "RateLimit"."windowStart"
+             < now() - (${LIMITES.ventanaSegundos}::int * interval '1 second')
+        THEN 1 ELSE "RateLimit"."count" + 1 END
+    RETURNING "count"
+  `;
+
+  const usadas = Number(filas[0]?.count ?? 1);
+  if (usadas > LIMITES.escriturasPorVentana) {
+    throw new ErrorApi(429, "demasiadasEscrituras");
+  }
 }

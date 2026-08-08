@@ -42,6 +42,57 @@ model Shop {
   plan            String    @default("FREE")
   planActivatedAt DateTime?
   lastSyncAt      DateTime?
+  settings        Json?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+
+  wishlists Wishlist[]
+}
+
+/// Una lista de favoritos. Pertenece a un cliente registrado (customerId) o a
+/// un invitado (anonymousId), nunca a los dos ni a ninguno: la migración
+/// agrega un CHECK que lo obliga, porque Prisma no sabe expresar un XOR.
+model Wishlist {
+  id          String    @id @default(cuid())
+  shopId      String
+  customerId  String?
+  anonymousId String?
+  name        String
+  isDefault   Boolean   @default(false)
+  /// null hasta que el dueño pulsa "compartir". Sin token no hay link público.
+  shareToken  String?   @unique
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  shop  Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  items WishlistItem[]
+
+  @@index([shopId, customerId])
+  @@index([shopId, anonymousId])
+}
+
+/// Solo IDs de Shopify. Nada de título, precio ni imagen: eso se lee de Shopify
+/// al mostrar, para no servir precios viejos ni productos borrados.
+model WishlistItem {
+  id         String   @id @default(cuid())
+  wishlistId String
+  productId  String
+  variantId  String?
+  addedAt    DateTime @default(now())
+
+  wishlist Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+
+  /// OJO: la migración recrea este índice con NULLS NOT DISTINCT. Sin eso, en
+  /// Postgres NULL != NULL y el mismo producto sin variante entraría infinitas
+  /// veces, que es justo el caso del corazón en páginas de colección.
+  @@unique([wishlistId, productId, variantId])
+  @@index([wishlistId])
+}
+
+/// Ventana fija por identidad para limitar escrituras. Vive en Postgres porque
+/// Vercel es serverless: un contador en memoria no se comparte entre instancias.
+model RateLimit {
+  key         String   @id
+  windowStart DateTime @default(now())
+  count       Int      @default(0)
 }

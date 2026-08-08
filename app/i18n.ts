@@ -19,6 +19,29 @@ export const es = {
     cancelar: "Cancelar",
     errorGenerico: "Ocurrió un error. Intentá de nuevo.",
   },
+  wishlist: {
+    listaPredeterminada: "Favoritos",
+  },
+  /** Mensajes que devuelve la API del App Proxy. Los muestra el storefront. */
+  api: {
+    identidadFaltante:
+      "No pudimos identificarte. Recargá la página e intentá de nuevo.",
+    identidadInvalida: "El identificador de invitado no es válido.",
+    cuerpoInvalido: "La solicitud no tiene el formato esperado.",
+    metodoNoPermitido: "Ese método no está permitido en esta dirección.",
+    listaNoEncontrada: "No encontramos esa lista.",
+    itemNoEncontrado: "No encontramos ese producto en tu lista.",
+    nombreRequerido: "La lista necesita un nombre.",
+    nombreMuyLargo: "El nombre de la lista es demasiado largo.",
+    productoRequerido: "Falta indicar el producto.",
+    noSePuedeBorrarPredeterminada: "No podés borrar tu lista de favoritos.",
+    demasiadasListas: "Llegaste al máximo de listas.",
+    listaLlena: "Esta lista llegó al máximo de productos.",
+    demasiadasEscrituras:
+      "Estás haciendo demasiados cambios muy rápido. Esperá un momento.",
+    firmaInvalida: "No pudimos validar la solicitud.",
+    errorInterno: "Algo salió mal. Intentá de nuevo.",
+  },
 } as const;
 
 export const locales = { es } as const;

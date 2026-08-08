@@ -1,18 +1,22 @@
 import type { LoaderFunctionArgs } from "react-router";
 
-import { authenticateProxy } from "../proxy.server";
+import { ErrorApi, json, manejar, verificarFirmaProxy } from "../proxy.server";
 
 /**
  * GET /apps/lovelist/ping (storefront) -> /proxy/ping (esta app)
  *
- * Solo sirve para comprobar que la tubería del App Proxy funciona en Vercel.
- * Si la firma no valida, `authenticateProxy` lanza un 401.
+ * Comprueba que la tubería del App Proxy funciona. A diferencia del resto de
+ * /proxy, NO exige identidad: solo valida la firma. Sirve para diagnosticar el
+ * proxy aislado de la lógica de wishlist.
  */
-export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { shop, loggedInCustomerId } = authenticateProxy(request);
+export const loader = ({ request }: LoaderFunctionArgs) =>
+  manejar(async () => {
+    const firma = verificarFirmaProxy(new URL(request.url));
+    if (!firma.valido) throw new ErrorApi(401, "firmaInvalida");
 
-  return Response.json(
-    { ok: true, shop, loggedInCustomerId },
-    { headers: { "Cache-Control": "no-store" } },
-  );
-};
+    return json({
+      ok: true,
+      shop: firma.shop,
+      loggedInCustomerId: firma.loggedInCustomerId,
+    });
+  });
