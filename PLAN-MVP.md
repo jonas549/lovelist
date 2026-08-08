@@ -26,7 +26,11 @@ entregas chicas y verificables que una grande que no sé por dónde probar.
 
 ---
 
-## Estado actual (Fases 1, 2.1 y 2.2 — terminadas)
+## Estado actual (Fases 1 a 2.4 — terminadas)
+
+> Para el detalle de cómo se llegó hasta acá —decisiones, errores cometidos y
+> trampas del entorno— ver [`BITACORA.md`](BITACORA.md). Este documento dice
+> **qué** hay que hacer; la bitácora dice **cómo** llegamos y qué aprendimos.
 
 **Fase 1 — cascarón desplegado**
 
@@ -61,12 +65,37 @@ entregas chicas y verificables que una grande que no sé por dónde probar.
 - Banco de pruebas versionado en `theme-src/banco-pruebas.html` (`npm run test:theme`),
   36 comprobaciones en tres modos
 
+**Fase 2.3 — invitados y migración a cuenta**
+
+- `POST /proxy/merge`: une las listas de invitado con las del cliente la primera
+  vez que se lo ve con sesión iniciada
+- Empareja por nombre; si no hay equivalente, **reasigna** la lista en vez de
+  copiarla, así conserva su `shareToken` y un link ya compartido sigue vivo
+- Fusiona, nunca reemplaza. Idempotente: al terminar no quedan listas anónimas
+- Probado por Jonas en la tienda real, en incógnito y con cuenta
+
+**Fase 2.4 — página completa y compartir**
+
+- `app/productos.server.ts` resuelve los productos contra la Admin API. Esto
+  reemplaza el apaño de la 2.2, que dependía de un caché de handles en
+  `localStorage` y se perdía entre dispositivos
+- `GET /apps/lovelist` devuelve Liquid y hereda el layout del tema
+- `GET /apps/lovelist/shared/:token` va entera del servidor, con `noindex`
+- `POST /proxy/products` para el drawer y la página
+- Los productos borrados o despublicados se ocultan; los agotados salen marcados
+- **Sin verificar todavía en la tienda real:** la página propia y la vista
+  compartida. Ver la sección 7 de `BITACORA.md`
+
 **Confirmado en la tienda de desarrollo:** el App Proxy reenvía `PATCH` y `DELETE`
 nativos. Se usan métodos HTTP normales; el respaldo `POST` + `_method` sigue
 aceptado en el servidor pero el storefront no lo necesita.
 
 **Al probar cambios del storefront: recarga forzada (Ctrl+F5).** El CDN de Shopify
 sirve el asset viejo durante un rato y parece un fallo de la app.
+
+**El `[error] AssetSizeAppBlockJavaScript` de `shopify app build` es un falso
+positivo conocido.** Mide el archivo crudo; el límite real de Shopify es sobre el
+comprimido. El control de verdad está en `scripts/build-theme.mjs`.
 
 ---
 
