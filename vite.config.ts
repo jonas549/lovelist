@@ -15,8 +15,25 @@ if (
   delete process.env.HOST;
 }
 
-const host = new URL(process.env.SHOPIFY_APP_URL || "http://localhost")
-  .hostname;
+// SHOPIFY_APP_URL solo se usa para el server de desarrollo (allowedHosts y HMR),
+// pero un valor sin protocolo hacia reventar el build entero con un
+// "TypeError: Invalid URL" bastante opaco. Preferimos degradar a localhost.
+function hostnameDeAppUrl(): string {
+  const crudo = process.env.SHOPIFY_APP_URL;
+  if (!crudo) return "localhost";
+  try {
+    return new URL(crudo).hostname;
+  } catch {
+    console.warn(
+      `[vite.config] SHOPIFY_APP_URL no es una URL valida (${crudo}). ` +
+        `Deberia incluir el protocolo, por ejemplo https://tu-app.vercel.app. ` +
+        `Uso "localhost" para esta build.`,
+    );
+    return "localhost";
+  }
+}
+
+const host = hostnameDeAppUrl();
 
 let hmrConfig;
 if (host === "localhost") {
