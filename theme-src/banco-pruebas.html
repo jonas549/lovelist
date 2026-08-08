@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Banco de pruebas Lovelist</title>
+<link rel="stylesheet" href="/assets/lovelist.css">
+<style>
+  body { font-family: system-ui, sans-serif; margin: 1rem; }
+  .grid__item, .product-card { border: 1px solid #ddd; padding: 8px; width: 200px; display: inline-block; vertical-align: top; margin: 4px; list-style: none; }
+  a.card { border: 1px solid #ddd; padding: 8px; width: 200px; display: inline-block; vertical-align: top; margin: 4px; }
+  img { width: 100%; height: 90px; object-fit: cover; background: #eee; }
+  #resultados { background: #111; color: #0f0; padding: 12px; white-space: pre-wrap; font-family: monospace; }
+  /* Dawn: el drawer movil vive plegado dentro de un <details> sin open */
+  .menu-drawer { visibility: hidden; }
+  #banner { border: 2px dashed #c00; padding: 12px; margin: 12px 0; }
+</style>
+</head>
+<body>
+
+<!-- ============ HEADER ESTILO DAWN REAL ============
+     Dawn tiene VARIOS enlaces a /cart. El primero en orden del documento vive
+     dentro del menu movil plegado. Quedarse con ese deja el contador invisible. -->
+<header class="header header--middle-center">
+  <header-drawer>
+    <details class="menu-drawer-container">
+      <summary>Menu</summary>
+      <div class="menu-drawer">
+        <nav class="menu-drawer__navigation">
+          <ul class="menu-drawer__menu">
+            <li><a href="https://tienda.test/cart" id="cart-drawer-oculto">Carrito (drawer plegado)</a></li>
+            <li><a href="/products/destacado-del-menu">Producto del menu</a></li>
+          </ul>
+        </nav>
+      </div>
+    </details>
+  </header-drawer>
+  <a href="https://tienda.test/cart" id="cart-invisible" style="visibility:hidden">Carrito oculto por visibility</a>
+  <div class="header__icons">
+    <a href="/cart" id="cart-bueno" class="header__icon--cart">Carrito</a>
+  </div>
+</header>
+
+<main>
+  <ul id="dawn">
+    <li class="grid__item">
+      <div class="card-wrapper"><div class="card">
+        <div class="card__inner"><img alt=""></div>
+        <a href="/products/dawn-uno" class="full-unstyled-link">Dawn uno</a>
+        <span class="price">$18.00</span>
+      </div></div>
+    </li>
+    <li class="grid__item">
+      <div class="card-wrapper"><div class="card">
+        <div class="card__inner"><img alt=""></div>
+        <a href="/products/dawn-dos" class="full-unstyled-link">Dawn dos</a>
+        <span class="price">$22.00</span>
+      </div></div>
+    </li>
+  </ul>
+
+  <div class="product-card" id="simple" data-product-id="778899">
+    <a href="/products/simple-con-id"><img alt=""></a>
+    <h3>Simple con id</h3><span class="price">$10.00</span>
+  </div>
+
+  <a href="/products/tarjeta-enlace" class="card"><img alt=""><span>Tarjeta enlace</span><span class="price">$30.00</span></a>
+
+  <div class="product-card" id="doble">
+    <a href="/products/doble-enlace"><img alt=""></a>
+    <a href="/products/doble-enlace"><h3>Doble enlace</h3></a>
+    <span class="price">$40.00</span>
+  </div>
+
+  <!-- ============ BANNER PROMOCIONAL ============
+       Imagen + un solo enlace a producto: cumple la heuristica vieja pero NO
+       es una tarjeta. Sin precio y sin hermanos con productos. -->
+  <section id="banner">
+    <div class="banner__box">
+      <img alt="">
+      <h2>Stay hydrated</h2>
+      <p>Nuestra botella favorita para el verano.</p>
+      <a href="/products/banner-hidratacion" class="button">Comprar ahora</a>
+    </div>
+  </section>
+
+  <p id="parrafo">Mirá también <a href="/products/mencion-en-texto">esta mención</a> en el texto.</p>
+</main>
+
+<pre id="resultados">corriendo…</pre>
+
+<script>
+  var SIN_ESTADO = /[?&]sin-estado/.test(location.search);
+  var CACHE_INICIAL = Object.keys(JSON.parse(localStorage.getItem("lovelist_handles")||"{}")).length;
+  var PEDIDOS = [], SEQ = 0;
+  var IDS = { "dawn-uno": 111111, "dawn-dos": 222222, "simple-con-id": 778899,
+              "tarjeta-enlace": 333333, "doble-enlace": 444444,
+              "llegado-por-ajax": 555555, "banner-hidratacion": 666666,
+              "destacado-del-menu": 777777, "mencion-en-texto": 888888 };
+
+  // ESTADO PREVIO: como si el comprador ya hubiera guardado "dawn-uno" antes.
+  // Esto es lo que el banco anterior nunca probaba.
+  var GUARDADOS = SIN_ESTADO ? [] : [
+    { id: "pre1", productId: "gid://shopify/Product/111111", variantId: null, addedAt: "" }
+  ];
+
+  window.FALLAR_ESCRITURAS = false;
+  window.fetch = function (url, init) {
+    PEDIDOS.push({ url: String(url), method: (init && init.method) || "GET" , body: init && init.body });
+    var u = String(url), m = (init && init.method) || "GET";
+    var j = function (o, s) { return Promise.resolve(new Response(JSON.stringify(o), { status: s || 200, headers: { "Content-Type": "application/json" } })); };
+
+    if (u.indexOf("/apps/lovelist/lists") === 0) {
+      return j({ ok: true, lists: GUARDADOS.length
+        ? [{ id: "l1", name: "Favoritos", isDefault: true, shareToken: null, shareUrl: null,
+             itemCount: GUARDADOS.length, items: GUARDADOS.slice() }] : [] });
+    }
+    if (u.indexOf("/apps/lovelist/items") === 0) {
+      if (window.FALLAR_ESCRITURAS) return j({ ok: false, code: "errorInterno", message: "Algo salió mal." }, 500);
+      if (m === "POST") {
+        var c = JSON.parse(init.body);
+        var it = { id: "it" + (++SEQ), productId: c.productId, variantId: c.variantId || null, addedAt: "" };
+        GUARDADOS.push(it);
+        return j({ ok: true, created: true, item: it, list: { id: "l1", name: "Favoritos", isDefault: true, shareUrl: null } }, 201);
+      }
+      if (m === "DELETE") {
+        var id = u.split("/items/")[1].split("?")[0];
+        GUARDADOS = GUARDADOS.filter(function (x) { return x.id !== id; });
+        return j({ ok: true, deletedItemId: id, listId: "l1" });
+      }
+    }
+    if (u.indexOf("/products/") === 0 && u.indexOf(".js") > 0) {
+      var h = u.replace("/products/", "").replace(".js", "");
+      if (!IDS[h]) return Promise.resolve(new Response("no", { status: 404 }));
+      return j({ id: IDS[h], title: "Producto " + h, handle: h, price: 199900, available: true, featured_image: null });
+    }
+    return Promise.resolve(new Response("no", { status: 404 }));
+  };
+  window.__errores = [];
+  window.addEventListener("error", function (e) { window.__errores.push(String(e.message)); });
+</script>
+
+<script type="application/json" id="lovelist-config">
+{ "moneda": "ARS", "idioma": "es", "clienteConectado": false,
+  "textos": { "guardar": "Guardar en favoritos", "quitar": "Quitar de favoritos",
+              "misFavoritos": "Mis favoritos", "abrirFavoritos": "Abrir mis favoritos",
+              "cerrar": "Cerrar", "vacio": "Todavía no guardaste nada.",
+              "vacioAyuda": "Tocá el corazón.", "cargando": "Cargando…",
+              "productoGuardado": "Producto guardado", "noSePudoCargar": "No pudimos cargarlo.",
+              "errorGuardar": "No pudimos guardar el producto. Intentá de nuevo.", "errorQuitar": "No pudimos quitar." } }
+</script>
+
+<script src="/assets/lovelist.js"></script>
+
+<script>
+window.__resultado = null;
+(function () {
+  var out = [], fallos = 0;
+  function ok(nombre, fn) {
+    var cond = false, extra = "";
+    try {
+      var r = fn();
+      if (r && typeof r === "object" && "cond" in r) { cond = !!r.cond; extra = String(r.extra); }
+      else cond = !!r;
+    } catch (e) { extra = "excepcion: " + e.message; }
+    if (!cond) fallos++;
+    out.push((cond ? "PASS  " : "FALLO ") + nombre + (cond || !extra ? "" : "   <- " + extra));
+  }
+  function n(sel) { var e = document.querySelector(sel); return e ? e.querySelectorAll("[data-lovelist-boton]").length : -1; }
+  function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function pedidosProducto() { return PEDIDOS.filter(function (p) { return /^\/products\/.*\.js/.test(p.url); }); }
+
+  (async function () {
+    await esperar(2500);
+
+    if (SIN_ESTADO) {
+      out.push("=== MODO SIN ESTADO PREVIO ===");
+      ok("sin nada guardado NO gasta ni una peticion resolviendo handles", function () {
+        return { cond: pedidosProducto().length === 0, extra: JSON.stringify(pedidosProducto().map(function (p) { return p.url; })) }; });
+      ok("los corazones quedan vacios", function () {
+        return [].every.call(document.querySelectorAll("[data-lovelist-boton]"), function (b) { return b.getAttribute("aria-pressed") === "false"; }); });
+      out.push("");
+      out.push(fallos === 0 ? "TODO OK" : fallos + " FALLOS");
+      document.getElementById("resultados").textContent = out.join("\n");
+      window.__resultado = out.join("\n");
+      return;
+    }
+
+    out.push("=== BUG 1: estado previo al cargar la pagina ===");
+    ok("una tarjeta SIN id en el DOM se pinta llena desde el servidor", function () {
+      var b = document.querySelector('#dawn li:nth-child(1) [data-lovelist-boton]');
+      return { cond: b && b.getAttribute("aria-pressed") === "true", extra: b && b.getAttribute("aria-pressed") }; });
+    ok("resolvio el handle y lo dejo en el boton", function () {
+      var b = document.querySelector('#dawn li:nth-child(1) [data-lovelist-boton]');
+      return { cond: b && b.getAttribute("data-lovelist-producto") === "111111", extra: b && b.getAttribute("data-lovelist-producto") }; });
+    ok("las tarjetas NO guardadas quedan vacias", function () {
+      var b = document.querySelector('#dawn li:nth-child(2) [data-lovelist-boton]');
+      return { cond: b && b.getAttribute("aria-pressed") === "false", extra: b && b.getAttribute("aria-pressed") }; });
+    ok("cachea handle->id en localStorage para la proxima visita", function () {
+      var m = JSON.parse(localStorage.getItem("lovelist_handles") || "{}");
+      return { cond: m["dawn-uno"] === "gid://shopify/Product/111111", extra: JSON.stringify(m) }; });
+    ok(CACHE_INICIAL ? "con cache tibio pinta sin pedir NADA de red" : "primera visita: resolvio por red (se acepta)", function () {
+      var n = pedidosProducto().filter(function (p) { return /dawn-uno/.test(p.url); }).length;
+      return { cond: CACHE_INICIAL ? n === 0 : n >= 1, extra: "peticiones dawn-uno=" + n + " cacheInicial=" + CACHE_INICIAL };
+    });
+    ok("no resuelve el banner ni el enlace del menu", function () {
+      var malos = pedidosProducto().filter(function (p) { return /banner|destacado-del-menu|mencion/.test(p.url); });
+      return { cond: malos.length === 0, extra: JSON.stringify(malos.map(function (p) { return p.url; })) }; });
+
+    out.push("=== BUG 2: contador en el header real de Dawn ===");
+    ok("monta exactamente un contador", function () { return document.querySelectorAll(".lovelist-contador").length === 1; });
+    ok("el contador es VISIBLE", function () {
+      var c = document.querySelector(".lovelist-contador");
+      var r = c.getBoundingClientRect();
+      return { cond: r.width > 0 && r.height > 0 && getComputedStyle(c).visibility !== "hidden",
+               extra: "w=" + r.width + " h=" + r.height + " vis=" + getComputedStyle(c).visibility }; });
+    ok("NO quedo dentro del menu plegado", function () {
+      var c = document.querySelector(".lovelist-contador");
+      return { cond: !c.closest(".menu-drawer"), extra: c.parentElement && c.parentElement.className }; });
+    ok("quedo junto al carrito bueno del header", function () {
+      var c = document.querySelector(".lovelist-contador");
+      return { cond: c.parentElement && c.parentElement.classList.contains("header__icons"), extra: c.parentElement && c.parentElement.className }; });
+    ok("el contador muestra lo guardado (1)", function () {
+      var e = document.querySelector(".lovelist-contador-numero");
+      return { cond: e && e.textContent === "1", extra: e && e.textContent }; });
+
+    out.push("=== BUG 3: banner promocional ===");
+    ok("el banner NO recibe corazon", function () { return { cond: n("#banner") === 0, extra: n("#banner") }; });
+    ok("el enlace de texto NO recibe corazon", function () { return { cond: n("#parrafo") === 0, extra: n("#parrafo") }; });
+    ok("el menu NO recibe corazon", function () { return { cond: n("header") === 0, extra: n("header") }; });
+
+    out.push("=== deteccion de tarjetas (regresion) ===");
+    ok("Dawn: cada li recibe 1", function () {
+      return { cond: n("#dawn li:nth-child(1)") === 1 && n("#dawn li:nth-child(2)") === 1,
+               extra: n("#dawn li:nth-child(1)") + "/" + n("#dawn li:nth-child(2)") }; });
+    ok("tarjeta simple recibe 1", function () { return { cond: n("#simple") === 1, extra: n("#simple") }; });
+    ok("tarjeta que es toda un <a> recibe 1", function () { return { cond: n("a.card") === 1, extra: n("a.card") }; });
+    ok("doble enlace al mismo producto recibe 1", function () { return { cond: n("#doble") === 1, extra: n("#doble") }; });
+    ok("NO se inyecta suelto en main ni body", function () {
+      return !document.querySelector("main > [data-lovelist-boton], body > [data-lovelist-boton]"); });
+
+    out.push("=== carga infinita (se agrega a la grilla, como en la vida real) ===");
+    var li = document.createElement("li");
+    li.className = "grid__item";
+    li.innerHTML = '<div class="card"><div class="card__inner"><img alt=""></div>' +
+                   '<a href="/products/llegado-por-ajax">Ajax</a><span class="price">$9.00</span></div>';
+    document.getElementById("dawn").appendChild(li);
+    await esperar(500);
+    ok("inyecta DENTRO de la tarjeta nueva", function () {
+      return { cond: li.querySelectorAll("[data-lovelist-boton]").length === 1, extra: li.querySelectorAll("[data-lovelist-boton]").length }; });
+    document.body.appendChild(document.createElement("span"));
+    await esperar(400);
+    ok("reescanear NO duplica", function () {
+      return { cond: n("#simple") === 1 && n("#doble") === 1 && li.querySelectorAll("[data-lovelist-boton]").length === 1, extra: n("#simple") + "/" + n("#doble") }; });
+
+    out.push("=== guardar y quitar ===");
+    var btn = document.querySelector('#simple [data-lovelist-boton]');
+    btn.click();
+    ok("se marca ANTES de que responda la red", function () {
+      return { cond: btn.getAttribute("aria-pressed") === "true", extra: btn.getAttribute("aria-pressed") }; });
+    await esperar(600);
+    ok("sigue marcado tras confirmar el servidor", function () {
+      return { cond: btn.getAttribute("aria-pressed") === "true", extra: btn.getAttribute("aria-pressed") }; });
+    ok("el contador sube a 2", function () {
+      var e = document.querySelector(".lovelist-contador-numero");
+      return { cond: e && e.textContent === "2", extra: e && e.textContent }; });
+    ok("el cuerpo lleva productId normalizado", function () {
+      var p = PEDIDOS.filter(function (x) { return x.method === "POST"; })[0];
+      var c = p ? JSON.parse(p.body) : {};
+      return { cond: c.productId === "gid://shopify/Product/778899" && !!c.anonymousId, extra: JSON.stringify(c) }; });
+    btn.click();
+    await esperar(600);
+    ok("quitar lo deja vacio", function () {
+      return { cond: btn.getAttribute("aria-pressed") === "false", extra: btn.getAttribute("aria-pressed") }; });
+
+    out.push("=== fallo de red ===");
+    window.FALLAR_ESCRITURAS = true;
+    var btn2 = document.querySelector('#doble [data-lovelist-boton]');
+    btn2.click();
+    ok("optimista aunque vaya a fallar", function () { return btn2.getAttribute("aria-pressed") === "true"; });
+    await esperar(700);
+    ok("al fallar se revierte", function () {
+      return { cond: btn2.getAttribute("aria-pressed") === "false", extra: btn2.getAttribute("aria-pressed") }; });
+    ok("al fallar muestra mensaje en espanol", function () {
+      var a = document.querySelector(".lovelist-aviso");
+      return { cond: a && a.classList.contains("lovelist-aviso-visible") && /no pudimos guardar/i.test(a.textContent), extra: a && a.textContent }; });
+    window.FALLAR_ESCRITURAS = false;
+
+    out.push("=== drawer ===");
+    document.querySelector(".lovelist-contador").click();
+    await esperar(400);
+    ok("se abre", function () { return !!document.querySelector(".lovelist-drawer-abierto"); });
+    ok("es un dialog accesible", function () { return !!document.querySelector(".lovelist-drawer-panel[role='dialog'][aria-modal='true']"); });
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    await esperar(300);
+    ok("Escape lo cierra", function () { return !document.querySelector(".lovelist-drawer-abierto"); });
+
+    out.push("=== higiene ===");
+    ok("cero errores de JS", function () {
+      return { cond: window.__errores.length === 0, extra: JSON.stringify(window.__errores) }; });
+    ok("ninguna peticion sale del dominio de la tienda", function () {
+      var malas = PEDIDOS.filter(function (p) { return p.url.indexOf("http") === 0 || p.url.indexOf("vercel") >= 0; });
+      return { cond: malas.length === 0, extra: JSON.stringify(malas.map(function (p) { return p.url; })) }; });
+    ok("el CSS no tiene un solo selector sin prefijo", function () {
+      var malas = [];
+      Array.prototype.forEach.call(document.styleSheets, function (h) {
+        if (!h.href || h.href.indexOf("lovelist.css") === -1) return;
+        Array.prototype.forEach.call(h.cssRules, function (r) {
+          if (r.selectorText && !/lovelist-/.test(r.selectorText)) malas.push(r.selectorText);
+        });
+      });
+      return { cond: malas.length === 0, extra: JSON.stringify(malas) }; });
+    ok("resolvio como mucho una peticion por tarjeta sin id", function () {
+      return { cond: pedidosProducto().length <= 8, extra: pedidosProducto().length + ": " + JSON.stringify(pedidosProducto().map(function (p) { return p.url; })) }; });
+
+    out.push("");
+    out.push(fallos === 0 ? "TODO OK" : fallos + " FALLOS");
+    document.getElementById("resultados").textContent = out.join("\n");
+    window.__resultado = out.join("\n");
+  })();
+})();
+</script>
+</body>
+</html>

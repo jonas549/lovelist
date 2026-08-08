@@ -106,15 +106,29 @@
     return s.indexOf("gid://") === 0 ? s : "gid://shopify/Product/" + s;
   }
 
+  function deGid(gid) {
+    var s = String(gid == null ? "" : gid);
+    var i = s.lastIndexOf("/");
+    return i === -1 ? s : s.slice(i + 1);
+  }
+
   function handleDeUrl(href) {
     if (!href) return null;
     var m = String(href).match(/\/products\/([^/?#]+)/);
     return m ? m[1] : null;
   }
 
-  // Caché local de productId -> handle. Sirve para pintar el drawer sin pedirle
-  // datos de producto al servidor (la Fase 2.1 solo guarda IDs).
-  function mapaHandles() {
+  /**
+   * Caché persistente handle -> productId.
+   *
+   * Es la pieza que permite pintar los corazones al cargar la página. El
+   * servidor guarda IDs (decisión del plan), pero el marcado de una tarjeta de
+   * colección solo trae el handle, y el storefront no puede pedir un producto
+   * por ID sin credenciales. La relación handle↔ID no cambia nunca, así que
+   * cachearla es seguro y hace que la segunda visita no cueste una sola
+   * petición.
+   */
+  function mapaIds() {
     try {
       return JSON.parse(almacen.getItem(LS_HANDLES) || "{}") || {};
     } catch (e) {
@@ -122,11 +136,11 @@
     }
   }
 
-  function recordarHandle(productId, handle) {
-    if (!productId || !handle) return;
-    var m = mapaHandles();
-    if (m[productId] === handle) return;
-    m[productId] = handle;
+  function recordarId(handle, productId) {
+    if (!handle || !productId) return;
+    var m = mapaIds();
+    if (m[handle] === productId) return;
+    m[handle] = productId;
     var claves = Object.keys(m);
     if (claves.length > MAX_HANDLES) {
       claves.slice(0, claves.length - MAX_HANDLES).forEach(function (k) {
@@ -138,6 +152,18 @@
     } catch (e) {
       /* cuota llena: no es crítico */
     }
+  }
+
+  function idDeHandle(handle) {
+    return handle ? mapaIds()[handle] || null : null;
+  }
+
+  function handleDeId(productId) {
+    var m = mapaIds();
+    for (var h in m) {
+      if (Object.prototype.hasOwnProperty.call(m, h) && m[h] === productId) return h;
+    }
+    return null;
   }
 
   // -------------------------------------------------------------------------
@@ -286,7 +312,83 @@
   function pintarTodo() {
     todos("[data-lovelist-boton]").forEach(pintarBoton);
     pintarContador();
+    resolverPendientes();
     if (drawerAbierto()) pintarDrawer();
+  }
+
+  // ---- resolución de handles pendientes -----------------------------------
+  //
+  // Una tarjeta de colección solo trae el handle, y sin el productId no
+  // podemos saber si está guardada: el corazón se quedaría vacío para siempre
+  // aunque el servidor lo tenga. Esto cierra ese hueco.
+  //
+  // Se paga lo mínimo: nada si el visitante no tiene nada guardado, nada si el
+  // handle ya está en caché. El resto se resuelve de a cuatro y con un techo
+  // por carga; lo que quede afuera se resuelve solo si el comprador lo toca.
+  //
+  // Antes esto usaba IntersectionObserver para pedir únicamente las tarjetas
+  // que entraban en pantalla. Se descartó: en una pestaña en segundo plano el
+  // navegador no calcula intersecciones y los corazones no se pintaban nunca.
+  // Un comportamiento que depende de si la pestaña está visible es además
+  // imposible de probar de forma fiable.
+
+  var MAX_EN_PARALELO = 4;
+  var MAX_POR_CARGA = 40;
+  var enVuelo = 0;
+  var resueltosEnEstaCarga = 0;
+  var pendientes = [];
+
+  function bombearCola() {
+    while (enVuelo < MAX_EN_PARALELO && pendientes.length) {
+      // El lanzamiento va en su propia función a propósito: con `var btn`
+      // dentro del while, todos los callbacks compartirían la misma variable
+      // —`var` es de función, no de bloque— y terminarían repintando siempre
+      // el último botón.
+      lanzarResolucion(pendientes.shift());
+    }
+  }
+
+  function lanzarResolucion(btn) {
+    enVuelo++;
+    resolverProducto(btn)
+      .then(function () {
+        pintarBoton(btn);
+      })
+      .catch(function (e) {
+        registrar("no se pudo resolver un handle", e);
+      })
+      .then(function () {
+        enVuelo--;
+        bombearCola();
+      });
+  }
+
+  function resolverPendientes() {
+    // Sin nada guardado no hay corazón que llenar: no gastamos una sola petición.
+    if (!estado.cargado || !estado.items.length) return;
+
+    todos("[data-lovelist-boton]").forEach(function (btn) {
+      if (btn.getAttribute("data-lovelist-producto")) return;
+
+      var handle = btn.getAttribute("data-lovelist-handle");
+      if (!handle) return;
+
+      var cacheado = idDeHandle(handle);
+      if (cacheado) {
+        btn.setAttribute("data-lovelist-producto", deGid(cacheado));
+        pintarBoton(btn);
+        return;
+      }
+
+      if (btn.hasAttribute("data-lovelist-encolado")) return;
+      if (resueltosEnEstaCarga >= MAX_POR_CARGA) return;
+
+      resueltosEnEstaCarga++;
+      btn.setAttribute("data-lovelist-encolado", "");
+      pendientes.push(btn);
+    });
+
+    bombearCola();
   }
 
   /**
@@ -317,7 +419,7 @@
       .then(function (p) {
         var pid = aGid(p.id);
         btn.setAttribute("data-lovelist-producto", String(p.id));
-        recordarHandle(pid, handle);
+        recordarId(handle, pid);
         return { productId: pid, variantId: null };
       });
   }
@@ -384,7 +486,7 @@
             });
 
         var handle = btn.getAttribute("data-lovelist-handle");
-        if (handle) recordarHandle(info.productId, handle);
+        if (handle) recordarId(handle, info.productId);
 
         return peticion
           .then(function () {
@@ -520,6 +622,42 @@
     return null;
   }
 
+  /**
+   * Segunda señal para distinguir una tarjeta de un banner.
+   *
+   * "Tiene imagen y enlaza un solo producto" no alcanza: los banners
+   * promocionales, las secciones de imagen con texto y los bloques destacados
+   * cumplen exactamente esa forma, y terminaban con un corazón encima.
+   *
+   * Pedimos una de dos: que tenga hermanos de la misma forma (o sea, que viva
+   * en una grilla) o que muestre un precio. Un banner no cumple ninguna.
+   */
+  function pareceTarjetaDeProducto(tarjeta) {
+    return tieneHermanoConProducto(tarjeta) || tienePrecio(tarjeta);
+  }
+
+  function tieneHermanoConProducto(tarjeta) {
+    var padre = tarjeta.parentElement;
+    if (!padre) return false;
+    var hijos = padre.children;
+    for (var i = 0; i < hijos.length; i++) {
+      if (hijos[i] === tarjeta || !hijos[i].querySelector) continue;
+      if (hijos[i].querySelector('a[href*="/products/"]')) return true;
+    }
+    return false;
+  }
+
+  // Símbolo de moneda pegado a un número, en cualquiera de los dos órdenes.
+  var PRECIO =
+    /(?:[$€£¥₹₺₪]|\b(?:USD|EUR|GBP|ARS|MXN|COP|CLP|PEN|UYU|BRL)\b)\s?\d|\d[\d.,]*\s?[$€£¥₹₺₪]/;
+
+  function tienePrecio(tarjeta) {
+    // `price` no es de un tema concreto: es la convención de casi todos los de
+    // Shopify. Va como pista, nunca como único criterio.
+    if (tarjeta.querySelector('[class*="price"], [data-price], .money')) return true;
+    return PRECIO.test((tarjeta.textContent || "").slice(0, 500));
+  }
+
   function inyectable(enlace) {
     if (!enlace.closest) return false;
     // Nuestra propia interfaz, y los menús: ahí un corazón no tiene sentido.
@@ -559,6 +697,7 @@
           return;
         }
         if (tarjeta.offsetWidth && tarjeta.offsetWidth < ANCHO_MINIMO_TARJETA) return;
+        if (!pareceTarjetaDeProducto(tarjeta)) return;
 
         // Si el tema ya expone el ID, nos ahorramos resolverlo después.
         var idEnDom = tarjeta.getAttribute("data-product-id") || null;
@@ -606,20 +745,61 @@
       '</span><span class="lovelist-contador-numero" data-lovelist-numero>0</span>';
     contador.addEventListener("click", abrirDrawer);
 
-    // Preferimos el header, al lado del carrito. Si no lo encontramos, flotante:
-    // vale más un botón que se ve raro que un tema roto.
-    var carrito = document.querySelector(
-      "header a[href$='/cart'], header a[href*='/cart?'], [role='banner'] a[href$='/cart']",
-    );
+    var carrito = enlaceDelCarrito();
     if (carrito && carrito.parentElement) {
       contador.classList.add("lovelist-contador-header");
       carrito.parentElement.insertBefore(contador, carrito);
-    } else {
+    }
+
+    // Comprobamos que de verdad se vea. Un tema puede tener el carrito dentro
+    // de un menú plegado —Dawn mete uno en el drawer móvil, oculto— y ahí el
+    // contador existiría sin que nadie pueda verlo nunca. Si pasó eso, o si no
+    // encontramos dónde ponerlo, lo mandamos al modo flotante: vale más un
+    // botón que se ve raro que uno invisible.
+    if (!esVisible(contador)) {
+      contador.classList.remove("lovelist-contador-header");
       contador.classList.add("lovelist-contador-flotante");
       document.body.appendChild(contador);
     }
 
     pintarContador();
+  }
+
+  function esVisible(el) {
+    if (!el || !el.getClientRects || el.getClientRects().length === 0) return false;
+    // getClientRects sigue devolviendo cajas con visibility:hidden, así que no
+    // alcanza con preguntar por el layout.
+    var cs = window.getComputedStyle(el);
+    return cs.visibility !== "hidden" && cs.display !== "none";
+  }
+
+  /**
+   * El enlace al carrito del header, pero solo si está a la vista.
+   *
+   * Un tema tiene varios: Dawn trae cinco, y el primero en orden del documento
+   * vive dentro del menú móvil plegado. Quedarse con el primero que aparece
+   * mete el contador en un cajón que nadie abre.
+   */
+  function enlaceDelCarrito() {
+    var candidatos = todos(
+      "header a[href*='/cart'], [role='banner'] a[href*='/cart']",
+    ).filter(function (a) {
+      // /cart/change y compañía no cuentan.
+      return (
+        /\/cart(\?|#|$)/.test(a.getAttribute("href") || "") && esVisible(a)
+      );
+    });
+
+    if (!candidatos.length) return null;
+
+    // Entre los visibles preferimos el que sea un icono: ese es el grupo de
+    // iconos del header, que es donde el comprador espera un contador. Los
+    // demás suelen ser entradas de texto del menú de navegación. Mirar si
+    // contiene un svg funciona en cualquier tema; mirar clases, no.
+    for (var i = 0; i < candidatos.length; i++) {
+      if (candidatos[i].querySelector("svg, img")) return candidatos[i];
+    }
+    return candidatos[0];
   }
 
   function pintarContador() {
@@ -758,7 +938,7 @@
    * La Fase 2.4 lo resuelve de verdad, del lado del servidor.
    */
   function detallarItem(li, item) {
-    var handle = mapaHandles()[item.productId];
+    var handle = handleDeId(item.productId);
     if (!handle) return;
 
     fetch("/products/" + encodeURIComponent(handle) + ".js", {

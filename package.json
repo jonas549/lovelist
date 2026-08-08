@@ -4,6 +4,7 @@
   "scripts": {
     "build": "npm run build:theme && react-router build",
     "build:theme": "node scripts/build-theme.mjs",
+    "test:theme": "npm run build:theme && node scripts/banco-pruebas.mjs",
     "postinstall": "prisma generate",
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
