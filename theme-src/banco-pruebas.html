@@ -90,6 +90,7 @@
 
 <script>
   var SIN_ESTADO = /[?&]sin-estado/.test(location.search);
+  var PAGINA = /[?&]pagina/.test(location.search);
   var LOGUEADO = /[?&]logueado/.test(location.search);
   var MERGE_FALLA = /[?&]merge-falla/.test(location.search);
   var ANON_SEMBRADO = "11111111-2222-4333-8444-555555555555";
@@ -109,6 +110,23 @@
   var GUARDADOS = SIN_ESTADO ? [] : [
     { id: "pre1", productId: "gid://shopify/Product/111111", variantId: null, addedAt: "" }
   ];
+  if (PAGINA) {
+    // Dos items: uno comprable y otro agotado, para probar los dos caminos.
+    GUARDADOS = [
+      { id: "pre1", productId: "gid://shopify/Product/111111", variantId: null, addedAt: "" },
+      { id: "pre2", productId: "gid://shopify/Product/222222", variantId: null, addedAt: "" }
+    ];
+    // El armazon que manda el servidor en Liquid, tal cual.
+    document.addEventListener("DOMContentLoaded", function () {}, false);
+    document.write(
+      '<div class="lovelist-pagina" data-lovelist-pagina>' +
+      '<header class="lovelist-pagina-cabecera"><h1 class="lovelist-pagina-titulo">Lovelist</h1>' +
+      '<div class="lovelist-pagina-selector" data-lovelist-selector hidden></div></header>' +
+      '<div class="lovelist-pagina-acciones" data-lovelist-acciones hidden></div>' +
+      '<div class="lovelist-pagina-cuerpo" data-lovelist-pagina-cuerpo></div>' +
+      '<div class="lovelist-compartir" data-lovelist-compartir hidden></div></div>'
+    );
+  }
 
   window.FALLAR_ESCRITURAS = false;
   window.fetch = function (url, init) {
@@ -116,10 +134,26 @@
     var u = String(url), m = (init && init.method) || "GET";
     var j = function (o, s) { return Promise.resolve(new Response(JSON.stringify(o), { status: s || 200, headers: { "Content-Type": "application/json" } })); };
 
+    if (/\/apps\/lovelist\/lists\/[^/]+\/share/.test(u)) {
+      return j({ ok: true, shareUrl: "https://tienda.test/apps/lovelist/shared/tok" + "x".repeat(30),
+                 list: { id: "l1", name: "Favoritos", shareToken: "tok" + "x".repeat(30) } });
+    }
     if (u.indexOf("/apps/lovelist/lists") === 0) {
       return j({ ok: true, lists: GUARDADOS.length
         ? [{ id: "l1", name: "Favoritos", isDefault: true, shareToken: null, shareUrl: null,
              itemCount: GUARDADOS.length, items: GUARDADOS.slice() }] : [] });
+    }
+    // Nunca resuelve: asi el "agregar al carrito" no nos saca de la pagina y
+    // podemos comprobar que la peticion salio bien formada.
+    if (u.indexOf("/cart/add.js") === 0) return new Promise(function () {});
+
+    if (u.indexOf("/apps/lovelist/products") === 0) {
+      return j({ ok: true, products: GUARDADOS.map(function (it, n) {
+        return { productId: it.productId, title: "Producto " + (n + 1), handle: "p" + (n + 1),
+                 url: "/products/p" + (n + 1), imagen: null, imagenAlt: "", precio: "1999.00",
+                 moneda: "ARS", disponible: n === 0, varianteTitulo: null,
+                 variantIdParaCarrito: n === 0 ? "900" + n : null };
+      }) });
     }
     if (u.indexOf("/apps/lovelist/merge") === 0) {
       if (MERGE_FALLA) return j({ ok: false, code: "errorInterno", message: "Algo salió mal." }, 500);
@@ -157,7 +191,7 @@
   tagCfg.type = "application/json";
   tagCfg.id = "lovelist-config";
   tagCfg.textContent = JSON.stringify({
-    moneda: "ARS", idioma: "es", clienteConectado: LOGUEADO || MERGE_FALLA,
+    moneda: "ARS", idioma: "es-AR", clienteConectado: LOGUEADO || MERGE_FALLA,
     textos: { guardar: "Guardar en favoritos", quitar: "Quitar de favoritos",
               misFavoritos: "Mis favoritos", abrirFavoritos: "Abrir mis favoritos",
               cerrar: "Cerrar", vacio: "Todavía no guardaste nada.",
@@ -191,6 +225,68 @@ window.__resultado = null;
 
   (async function () {
     await esperar(2500);
+
+    if (PAGINA) {
+      out.push("=== PAGINA COMPLETA ===");
+      var raiz = document.querySelector("[data-lovelist-pagina]");
+
+      ok("pinta la grilla con los productos del servidor", function () {
+        var n = raiz.querySelectorAll(".lovelist-tarjeta").length;
+        return { cond: n === 2, extra: n }; });
+      ok("usa titulo y enlace que vinieron del servidor", function () {
+        var a = raiz.querySelector(".lovelist-tarjeta-titulo");
+        return { cond: a && a.textContent === "Producto 1" && a.getAttribute("href") === "/products/p1",
+                 extra: a && a.textContent + " " + a.getAttribute("href") }; });
+      ok("los datos salen del servidor, no del cache de handles", function () {
+        var delServidor = PEDIDOS.filter(function (p) { return p.url.indexOf("/apps/lovelist/products") === 0; });
+        var a = raiz.querySelector(".lovelist-tarjeta-titulo");
+        return { cond: delServidor.length >= 1 && a && a.textContent === "Producto 1",
+                 extra: "peticiones=" + delServidor.length + " titulo=" + (a && a.textContent) }; });
+      ok("formatea el precio en español", function () {
+        var e = raiz.querySelector(".lovelist-tarjeta-precio");
+        return { cond: e && /1\.999,00/.test(e.textContent) && /\$/.test(e.textContent), extra: e && e.textContent }; });
+      ok("el agotado sale marcado y sin boton de carrito", function () {
+        var tarjetas = raiz.querySelectorAll(".lovelist-tarjeta");
+        var ultima = tarjetas[tarjetas.length - 1];
+        return { cond: ultima.querySelector(".lovelist-agotado") && !ultima.querySelector("[data-lovelist-al-carrito]"),
+                 extra: ultima.textContent.replace(/\s+/g, " ").slice(0, 60) }; });
+      ok("solo el comprable entra en 'agregar todo'", function () {
+        var b = raiz.querySelector("[data-lovelist-agregar-todo]");
+        return { cond: b && b.getAttribute("data-lovelist-agregar-todo") === "9000", extra: b && b.getAttribute("data-lovelist-agregar-todo") }; });
+
+      raiz.querySelector("[data-lovelist-al-carrito]").click();
+      await esperar(200);
+      ok("agregar al carrito pega en /cart/add.js con la variante", function () {
+        var c = PEDIDOS.filter(function (p) { return p.url.indexOf("/cart/add.js") === 0; });
+        var b = c.length ? JSON.parse(c[0].body) : {};
+        return { cond: c.length === 1 && b.items && b.items[0].id === 9000 && b.items[0].quantity === 1, extra: JSON.stringify(b) }; });
+
+      raiz.querySelector("[data-lovelist-compartir-lista]").click();
+      await esperar(400);
+      ok("compartir muestra la URL publica", function () {
+        var i = raiz.querySelector("[data-lovelist-url]");
+        return { cond: i && /\/apps\/lovelist\/shared\/tok/.test(i.value), extra: i && i.value }; });
+      ok("y ofrece WhatsApp, email y copiar", function () {
+        var c = raiz.querySelector("[data-lovelist-compartir]");
+        return { cond: c.querySelector("a[href^='https://wa.me/']") && c.querySelector("a[href^='mailto:']") && c.querySelector("[data-lovelist-copiar]"),
+                 extra: c.innerHTML.slice(0, 120) }; });
+
+      raiz.querySelector("[data-lovelist-quitar-pagina]").click();
+      await esperar(500);
+      ok("quitar saca la tarjeta y manda DELETE", function () {
+        var d = PEDIDOS.filter(function (p) { return p.method === "DELETE"; });
+        return { cond: d.length === 1 && raiz.querySelectorAll(".lovelist-tarjeta").length === 1,
+                 extra: d.length + " / " + raiz.querySelectorAll(".lovelist-tarjeta").length }; });
+
+      ok("cero errores de JS", function () {
+        return { cond: window.__errores.length === 0, extra: JSON.stringify(window.__errores) }; });
+
+      out.push("");
+      out.push(fallos === 0 ? "TODO OK" : fallos + " FALLOS");
+      document.getElementById("resultados").textContent = out.join("\n");
+      window.__resultado = out.join("\n");
+      return;
+    }
 
     if (LOGUEADO || MERGE_FALLA) {
       var merges = PEDIDOS.filter(function (p) { return p.url.indexOf("/apps/lovelist/merge") === 0; });

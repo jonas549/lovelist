@@ -169,14 +169,6 @@
     return handle ? mapaIds()[handle] || null : null;
   }
 
-  function handleDeId(productId) {
-    var m = mapaIds();
-    for (var h in m) {
-      if (Object.prototype.hasOwnProperty.call(m, h) && m[h] === productId) return h;
-    }
-    return null;
-  }
-
   // -------------------------------------------------------------------------
   // Cliente de la API (todo por el App Proxy)
   // -------------------------------------------------------------------------
@@ -226,7 +218,14 @@
   // Estado
   // -------------------------------------------------------------------------
 
-  var estado = { listas: [], items: [], cargado: false };
+  var estado = {
+    listas: [],
+    items: [],
+    cargado: false,
+    /** productId -> datos resueltos por el servidor. Se llena bajo demanda. */
+    productos: {},
+    productosListos: false,
+  };
 
   function reindexar() {
     estado.items = [];
@@ -275,6 +274,113 @@
 
   function registrar(mensaje, e) {
     if (window.console && console.warn) console.warn("[Lovelist] " + mensaje, e || "");
+  }
+
+  /**
+   * Trae del servidor los datos de los productos guardados.
+   *
+   * Esto reemplaza el apaño de la Fase 2.2, que deducía el producto a partir de
+   * un caché de handles en localStorage: no funcionaba para nada guardado desde
+   * otro dispositivo. Ahora lo resuelve el servidor contra la Admin API.
+   *
+   * Se pide bajo demanda —al abrir el drawer o al entrar a la página— y no
+   * después de cada corazón: cada llamada es una consulta a la Admin API, y
+   * gastarla en cada clic sería tirar cuota de la tienda a la basura.
+   */
+  var yaPedidos = {};
+
+  function asegurarProductos() {
+    var falta = estado.items.some(function (i) {
+      return !yaPedidos[i.productId];
+    });
+    if (!falta) {
+      estado.productosListos = true;
+      return Promise.resolve();
+    }
+
+    return api("/products", { method: "POST" })
+      .then(function (r) {
+        var mapa = {};
+        (r.products || []).forEach(function (p) {
+          mapa[p.productId] = p;
+        });
+        estado.productos = mapa;
+        // Marcamos incluso los que no vinieron: un producto borrado no va a
+        // aparecer nunca, y sin esto lo volveríamos a pedir en cada repintado.
+        estado.items.forEach(function (i) {
+          yaPedidos[i.productId] = true;
+        });
+        estado.productosListos = true;
+      })
+      .catch(function (e) {
+        registrar("no se pudieron resolver los productos", e);
+        // Sin esto el drawer se quedaría en "Cargando…" para siempre.
+        estado.productosListos = true;
+      });
+  }
+
+  /**
+   * Formatea un importe siguiendo el idioma de la TIENDA, no el de la interfaz.
+   *
+   * Puede sonar raro teniendo la interfaz en español, pero no hay una única
+   * convención latinoamericana: México escribe 1,999.00 y Argentina 1.999,00.
+   * Fijar una sola sería incorrecto para el resto. Y sobre todo, el comprador
+   * compara este precio con el que ve en la ficha del producto: si los dos no
+   * se escriben igual, parece un error nuestro.
+   */
+  function formatearMonto(monto, moneda) {
+    var n = Number(monto);
+    if (!isFinite(n)) return "";
+    try {
+      return new Intl.NumberFormat(cfg.idioma || "es", {
+        style: "currency",
+        currency: moneda || cfg.moneda || "USD",
+      }).format(n);
+    } catch (e) {
+      return n.toFixed(2) + " " + (moneda || "");
+    }
+  }
+
+  /** Los precios llegan del servidor sin formato para poder formatearlos acá. */
+  function formatearPreciosEnPantalla(raiz) {
+    todos("[data-lovelist-precio]", raiz).forEach(function (el) {
+      if (el.textContent) return;
+      el.textContent = formatearMonto(
+        el.getAttribute("data-lovelist-precio"),
+        el.getAttribute("data-lovelist-moneda"),
+      );
+    });
+  }
+
+  /** Agrega variantes al carrito del tema y lleva al carrito. */
+  function alCarrito(ids) {
+    var items = ids
+      .filter(Boolean)
+      .map(function (id) {
+        return { id: Number(id), quantity: 1 };
+      })
+      .filter(function (i) {
+        return isFinite(i.id) && i.id > 0;
+      });
+    if (!items.length) return;
+
+    fetch("/cart/add.js", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ items: items }),
+    })
+      .then(function (r) {
+        if (!r.ok) throw new Error("carrito " + r.status);
+        return r.json();
+      })
+      .then(function () {
+        window.location.href = "/cart";
+      })
+      .catch(function (e) {
+        registrar("no se pudo agregar al carrito", e);
+        avisar(T.errorCarrito);
+      });
   }
 
   /**
@@ -363,7 +469,11 @@
     todos("[data-lovelist-boton]").forEach(pintarBoton);
     pintarContador();
     resolverPendientes();
-    if (drawerAbierto()) pintarDrawer();
+    if (drawerAbierto()) {
+      pintarDrawer();
+      asegurarProductos().then(pintarDrawer);
+    }
+    pintarPagina();
   }
 
   // ---- resolución de handles pendientes -----------------------------------
@@ -907,6 +1017,9 @@
     var cerrar = drawer.querySelector(".lovelist-drawer-cerrar");
     if (cerrar) cerrar.focus();
     pintarDrawer();
+    // Recién acá pedimos los datos de producto: mientras nadie abra el drawer,
+    // no hay motivo para gastar una consulta a la Admin API.
+    asegurarProductos().then(pintarDrawer);
   }
 
   function cerrarDrawer() {
@@ -931,45 +1044,39 @@
     var cuerpo = drawer.querySelector("[data-lovelist-cuerpo]");
     if (!cuerpo) return;
 
-    if (!estado.cargado) {
+    if (!estado.cargado || !estado.productosListos) {
       cuerpo.innerHTML =
-        '<p class="lovelist-drawer-vacio">' + escapar(T.cargando || "Cargando…") + "</p>";
+        '<p class="lovelist-drawer-vacio">' + escapar(T.cargando) + "</p>";
       return;
     }
 
     if (!estado.items.length) {
       cuerpo.innerHTML =
         '<p class="lovelist-drawer-vacio"><strong>' +
-        escapar(T.vacio || "") +
+        escapar(T.vacio) +
         "</strong><br>" +
-        escapar(T.vacioAyuda || "") +
+        escapar(T.vacioAyuda) +
         "</p>";
       return;
     }
 
-    var lista = document.createElement("ul");
-    lista.className = "lovelist-items";
-
+    var filas = [];
     estado.items.forEach(function (item) {
-      var li = document.createElement("li");
-      li.className = "lovelist-item";
-      li.setAttribute("data-lovelist-item", item.id);
-      li.innerHTML =
-        '<div class="lovelist-item-medio"></div>' +
-        '<div class="lovelist-item-datos"><span class="lovelist-item-titulo">' +
-        escapar(T.productoGuardado || "") +
-        "</span></div>" +
-        '<button type="button" class="lovelist-item-quitar" data-lovelist-quitar="' +
-        escapar(item.id) +
-        '" aria-label="' +
-        escapar(T.quitar || "") +
-        '">&times;</button>';
-      lista.appendChild(li);
-      detallarItem(li, item);
+      var p = estado.productos[item.productId];
+      // Borrado, archivado o fuera del canal online: se oculta, no rompe nada.
+      if (!p) return;
+      filas.push(filaDrawer(item, p));
     });
 
-    cuerpo.innerHTML = "";
-    cuerpo.appendChild(lista);
+    cuerpo.innerHTML =
+      (filas.length
+        ? '<ul class="lovelist-items">' + filas.join("") + "</ul>"
+        : '<p class="lovelist-drawer-vacio">' + escapar(T.vacio) + "</p>") +
+      '<a class="lovelist-drawer-ver-todos" href="' +
+      RUTA +
+      '">' +
+      escapar(T.verTodos) +
+      "</a>";
 
     todos("[data-lovelist-quitar]", cuerpo).forEach(function (b) {
       b.addEventListener("click", function () {
@@ -978,77 +1085,40 @@
     });
   }
 
-  /**
-   * Completa la fila con título, imagen y precio.
-   *
-   * La base solo guarda IDs (decisión del plan: nada de datos de producto), y
-   * el storefront no puede pedir un producto por ID sin credenciales. Usamos el
-   * handle que cacheamos al guardarlo. Si el favorito vino de otro dispositivo
-   * no lo tenemos y la fila queda neutra pero utilizable: se puede quitar.
-   * La Fase 2.4 lo resuelve de verdad, del lado del servidor.
-   */
-  function detallarItem(li, item) {
-    var handle = handleDeId(item.productId);
-    if (!handle) return;
-
-    fetch("/products/" + encodeURIComponent(handle) + ".js", {
-      headers: { Accept: "application/json" },
-      credentials: "same-origin",
-    })
-      .then(function (r) {
-        if (!r.ok) throw new Error("no disponible");
-        return r.json();
-      })
-      .then(function (p) {
-        var medio = li.querySelector(".lovelist-item-medio");
-        var datos = li.querySelector(".lovelist-item-datos");
-        if (medio && p.featured_image) {
-          var img = document.createElement("img");
-          img.src = p.featured_image;
-          img.alt = "";
-          img.loading = "lazy";
-          img.width = 64;
-          img.height = 64;
-          medio.appendChild(img);
-        }
-        if (datos) {
-          datos.innerHTML = "";
-          var a = document.createElement("a");
-          a.className = "lovelist-item-titulo";
-          a.href = "/products/" + handle;
-          a.textContent = p.title || "";
-          datos.appendChild(a);
-
-          if (typeof p.price === "number") {
-            var precio = document.createElement("span");
-            precio.className = "lovelist-item-precio";
-            precio.textContent = formatearPrecio(p.price);
-            datos.appendChild(precio);
-          }
-          if (p.available === false) {
-            var agotado = document.createElement("span");
-            agotado.className = "lovelist-item-agotado";
-            agotado.textContent = "—";
-            datos.appendChild(agotado);
-          }
-        }
-      })
-      .catch(function () {
-        var datos = li.querySelector(".lovelist-item-datos");
-        if (datos) datos.textContent = T.noSePudoCargar || "";
-      });
-  }
-
-  function formatearPrecio(centavos) {
-    var moneda = cfg.moneda || "USD";
-    try {
-      return new Intl.NumberFormat(cfg.idioma || undefined, {
-        style: "currency",
-        currency: moneda,
-      }).format(centavos / 100);
-    } catch (e) {
-      return (centavos / 100).toFixed(2) + " " + moneda;
-    }
+  function filaDrawer(item, p) {
+    return (
+      '<li class="lovelist-item">' +
+      '<a class="lovelist-item-medio" href="' +
+      escapar(p.url) +
+      '">' +
+      (p.imagen
+        ? '<img src="' +
+          escapar(p.imagen) +
+          '" alt="" loading="lazy" width="64" height="64">'
+        : "") +
+      "</a>" +
+      '<div class="lovelist-item-datos">' +
+      '<a class="lovelist-item-titulo" href="' +
+      escapar(p.url) +
+      '">' +
+      escapar(p.title) +
+      "</a>" +
+      '<span class="lovelist-item-precio">' +
+      escapar(formatearMonto(p.precio, p.moneda)) +
+      "</span>" +
+      (p.disponible
+        ? ""
+        : '<span class="lovelist-item-agotado">' +
+          escapar(T.agotado) +
+          "</span>") +
+      "</div>" +
+      '<button type="button" class="lovelist-item-quitar" data-lovelist-quitar="' +
+      escapar(item.id) +
+      '" aria-label="' +
+      escapar(T.quitarDeLista) +
+      '">&times;</button>' +
+      "</li>"
+    );
   }
 
   function quitarDesdeDrawer(itemId) {
@@ -1069,21 +1139,335 @@
   }
 
   // -------------------------------------------------------------------------
+  // Página completa (/apps/lovelist)
+  //
+  // El armazón lo manda el servidor en Liquid, para heredar el layout del tema.
+  // Acá solo completamos la grilla, porque la identidad de un invitado vive en
+  // su localStorage y el servidor no la tiene en una navegación normal.
+  // -------------------------------------------------------------------------
+
+  var paginaRaiz = null;
+  var listaActivaId = null;
+
+  function montarPagina() {
+    paginaRaiz = document.querySelector("[data-lovelist-pagina]");
+  }
+
+  function listaActiva() {
+    if (!estado.listas.length) return null;
+    var elegida = null;
+    estado.listas.forEach(function (l) {
+      if (l.id === listaActivaId) elegida = l;
+    });
+    return elegida || estado.listas[0];
+  }
+
+  function pintarPagina() {
+    if (!paginaRaiz) return;
+
+    var cuerpo = paginaRaiz.querySelector("[data-lovelist-pagina-cuerpo]");
+    var selector = paginaRaiz.querySelector("[data-lovelist-selector]");
+    var acciones = paginaRaiz.querySelector("[data-lovelist-acciones]");
+    var compartir = paginaRaiz.querySelector("[data-lovelist-compartir]");
+    if (!cuerpo) return;
+
+    if (!estado.cargado || !estado.productosListos) {
+      cuerpo.innerHTML =
+        '<p class="lovelist-pagina-cargando">' + escapar(T.cargando) + "</p>";
+      return;
+    }
+
+    var lista = listaActiva();
+    var items = lista ? lista.items : [];
+
+    // Selector: solo tiene sentido si hay más de una lista.
+    if (selector) {
+      if (estado.listas.length > 1) {
+        selector.innerHTML =
+          '<select class="lovelist-selector" data-lovelist-cambiar-lista>' +
+          estado.listas
+            .map(function (l) {
+              return (
+                '<option value="' +
+                escapar(l.id) +
+                '"' +
+                (lista && l.id === lista.id ? " selected" : "") +
+                ">" +
+                escapar(l.name) +
+                " (" +
+                l.items.length +
+                ")</option>"
+              );
+            })
+            .join("") +
+          "</select>";
+        selector.hidden = false;
+        var sel = selector.querySelector("[data-lovelist-cambiar-lista]");
+        if (sel) {
+          sel.addEventListener("change", function () {
+            listaActivaId = sel.value;
+            if (compartir) {
+              compartir.hidden = true;
+              compartir.innerHTML = "";
+            }
+            pintarPagina();
+          });
+        }
+      } else {
+        selector.hidden = true;
+        selector.innerHTML = "";
+      }
+    }
+
+    var visibles = [];
+    items.forEach(function (item) {
+      var p = estado.productos[item.productId];
+      if (p) visibles.push({ item: item, producto: p });
+    });
+
+    if (!visibles.length) {
+      cuerpo.innerHTML =
+        '<p class="lovelist-pagina-vacia"><strong>' +
+        escapar(T.vacio) +
+        "</strong><br>" +
+        escapar(T.vacioAyuda) +
+        "</p>";
+      if (acciones) {
+        acciones.hidden = true;
+        acciones.innerHTML = "";
+      }
+      return;
+    }
+
+    cuerpo.innerHTML =
+      '<ul class="lovelist-grilla">' +
+      visibles
+        .map(function (v) {
+          return tarjetaPagina(v.item, v.producto);
+        })
+        .join("") +
+      "</ul>";
+
+    if (acciones) {
+      var comprables = visibles
+        .map(function (v) {
+          return v.producto.variantIdParaCarrito;
+        })
+        .filter(Boolean);
+
+      acciones.innerHTML =
+        (comprables.length
+          ? '<button type="button" class="lovelist-boton-principal" data-lovelist-agregar-todo="' +
+            escapar(comprables.join(",")) +
+            '">' +
+            escapar(T.agregarTodo) +
+            "</button>"
+          : "") +
+        (lista
+          ? '<button type="button" class="lovelist-boton-secundario" data-lovelist-compartir-lista="' +
+            escapar(lista.id) +
+            '">' +
+            escapar(T.compartir) +
+            "</button>"
+          : "");
+      acciones.hidden = !acciones.innerHTML;
+    }
+
+    formatearPreciosEnPantalla(paginaRaiz);
+  }
+
+  function tarjetaPagina(item, p) {
+    return (
+      '<li class="lovelist-tarjeta">' +
+      '<a class="lovelist-tarjeta-imagen" href="' +
+      escapar(p.url) +
+      '">' +
+      (p.imagen
+        ? '<img src="' +
+          escapar(p.imagen) +
+          '" alt="' +
+          escapar(p.imagenAlt) +
+          '" loading="lazy" width="300" height="300">'
+        : "") +
+      "</a>" +
+      '<div class="lovelist-tarjeta-datos">' +
+      '<a class="lovelist-tarjeta-titulo" href="' +
+      escapar(p.url) +
+      '">' +
+      escapar(p.title) +
+      "</a>" +
+      (p.varianteTitulo
+        ? '<span class="lovelist-tarjeta-variante">' +
+          escapar(p.varianteTitulo) +
+          "</span>"
+        : "") +
+      '<span class="lovelist-tarjeta-precio" data-lovelist-precio="' +
+      escapar(p.precio) +
+      '" data-lovelist-moneda="' +
+      escapar(p.moneda) +
+      '"></span>' +
+      (p.variantIdParaCarrito
+        ? '<button type="button" class="lovelist-boton-carrito" data-lovelist-al-carrito="' +
+          escapar(p.variantIdParaCarrito) +
+          '">' +
+          escapar(T.alCarrito) +
+          "</button>"
+        : '<span class="lovelist-agotado">' + escapar(T.agotado) + "</span>") +
+      '<button type="button" class="lovelist-tarjeta-quitar" data-lovelist-quitar-pagina="' +
+      escapar(item.id) +
+      '">' +
+      escapar(T.quitarDeLista) +
+      "</button>" +
+      "</div>" +
+      "</li>"
+    );
+  }
+
+  function compartirLista(listaId) {
+    var caja = paginaRaiz && paginaRaiz.querySelector("[data-lovelist-compartir]");
+    if (!caja) return;
+
+    api("/lists/" + encodeURIComponent(listaId) + "/share", { method: "POST" })
+      .then(function (r) {
+        var url = r.shareUrl;
+        if (!url) throw new Error("sin url");
+        var texto = T.mensajeCompartir + " " + url;
+
+        caja.innerHTML =
+          '<input class="lovelist-compartir-url" type="text" readonly value="' +
+          escapar(url) +
+          '" data-lovelist-url>' +
+          '<div class="lovelist-compartir-botones">' +
+          '<button type="button" class="lovelist-boton-secundario" data-lovelist-copiar>' +
+          escapar(T.copiarLink) +
+          "</button>" +
+          '<a class="lovelist-boton-secundario" target="_blank" rel="noopener" href="https://wa.me/?text=' +
+          encodeURIComponent(texto) +
+          '">' +
+          escapar(T.porWhatsapp) +
+          "</a>" +
+          '<a class="lovelist-boton-secundario" href="mailto:?subject=' +
+          encodeURIComponent(T.asuntoEmail) +
+          "&body=" +
+          encodeURIComponent(texto) +
+          '">' +
+          escapar(T.porEmail) +
+          "</a>" +
+          "</div>";
+        caja.hidden = false;
+
+        var copiar = caja.querySelector("[data-lovelist-copiar]");
+        if (copiar) {
+          copiar.addEventListener("click", function () {
+            copiarAlPortapapeles(url, copiar);
+          });
+        }
+      })
+      .catch(function (e) {
+        registrar("no se pudo compartir la lista", e);
+        avisar(T.errorCompartir);
+      });
+  }
+
+  function copiarAlPortapapeles(texto, boton) {
+    var listo = function () {
+      var antes = boton.textContent;
+      boton.textContent = T.copiado;
+      setTimeout(function () {
+        boton.textContent = antes;
+      }, 2000);
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(texto).then(listo, function () {
+        seleccionarUrl();
+      });
+      return;
+    }
+    seleccionarUrl();
+
+    // Sin API de portapapeles (http, navegadores viejos) al menos dejamos el
+    // texto seleccionado para que se pueda copiar a mano.
+    function seleccionarUrl() {
+      var campo = paginaRaiz && paginaRaiz.querySelector("[data-lovelist-url]");
+      if (campo && campo.select) campo.select();
+    }
+  }
+
+  function quitarDesdePagina(itemId) {
+    var previos = estado.items.slice();
+    estado.items = estado.items.filter(function (i) {
+      return i.id !== itemId;
+    });
+    estado.listas.forEach(function (l) {
+      l.items = l.items.filter(function (i) {
+        return i.id !== itemId;
+      });
+    });
+    pintarTodo();
+
+    api("/items/" + encodeURIComponent(itemId), { method: "DELETE" })
+      .then(cargar)
+      .catch(function (e) {
+        estado.items = previos;
+        pintarTodo();
+        avisar(mensajeDeError(e, true));
+      });
+  }
+
+  // -------------------------------------------------------------------------
   // Arranque
   // -------------------------------------------------------------------------
 
   function iniciar() {
     try {
       document.addEventListener("click", function (ev) {
-        var btn = ev.target.closest && ev.target.closest("[data-lovelist-boton]");
-        if (!btn) return;
-        ev.preventDefault();
-        ev.stopPropagation();
-        alternar(btn);
+        if (!ev.target.closest) return;
+
+        var btn = ev.target.closest("[data-lovelist-boton]");
+        if (btn) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          alternar(btn);
+          return;
+        }
+
+        // Estos viven tanto en la página propia como en la vista compartida,
+        // que llega ya renderizada del servidor: por eso van delegados.
+        var uno = ev.target.closest("[data-lovelist-al-carrito]");
+        if (uno) {
+          ev.preventDefault();
+          alCarrito([uno.getAttribute("data-lovelist-al-carrito")]);
+          return;
+        }
+
+        var todo = ev.target.closest("[data-lovelist-agregar-todo]");
+        if (todo) {
+          ev.preventDefault();
+          alCarrito(todo.getAttribute("data-lovelist-agregar-todo").split(","));
+          return;
+        }
+
+        var quitar = ev.target.closest("[data-lovelist-quitar-pagina]");
+        if (quitar) {
+          ev.preventDefault();
+          quitarDesdePagina(quitar.getAttribute("data-lovelist-quitar-pagina"));
+          return;
+        }
+
+        var compartir = ev.target.closest("[data-lovelist-compartir-lista]");
+        if (compartir) {
+          ev.preventDefault();
+          compartirLista(compartir.getAttribute("data-lovelist-compartir-lista"));
+        }
       });
 
       montarContador();
+      montarPagina();
       escanear(document);
+
+      // La vista compartida ya viene con los precios sin formato del servidor.
+      formatearPreciosEnPantalla(document);
 
       // Carga infinita, filtros AJAX, cambios de sección en el editor de temas.
       if (window.MutationObserver) {
@@ -1096,7 +1480,13 @@
         });
       }
 
-      fusionarSiHaceFalta().then(cargar);
+      fusionarSiHaceFalta()
+        .then(cargar)
+        .then(function () {
+          // En la página propia los datos de producto hacen falta ya; en el
+          // resto del sitio se piden solo cuando se abre el drawer.
+          if (paginaRaiz) return asegurarProductos().then(pintarPagina);
+        });
     } catch (e) {
       registrar("no se pudo iniciar", e);
     }

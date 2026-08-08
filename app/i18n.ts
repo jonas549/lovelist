@@ -22,6 +22,26 @@ export const es = {
   wishlist: {
     listaPredeterminada: "Favoritos",
   },
+  /** Página de favoritos y vista compartida, servidas por el App Proxy. */
+  pagina: {
+    vacia: "Esta lista está vacía.",
+    vaciaAyuda: "Tocá el corazón en cualquier producto para guardarlo acá.",
+    agotado: "Sin stock",
+    alCarrito: "Agregar al carrito",
+    agregarTodo: "Agregar todo al carrito",
+    quitar: "Quitar",
+    compartir: "Compartir esta lista",
+    copiarLink: "Copiar link",
+    copiado: "Link copiado",
+    porWhatsapp: "Compartir por WhatsApp",
+    porEmail: "Compartir por email",
+    mensajeCompartir: "Mirá mi lista de favoritos:",
+    asuntoEmail: "Mi lista de favoritos",
+    listaCompartida: "Lista compartida",
+    soloLectura: "Estás viendo una lista que alguien compartió con vos.",
+    noEncontrada: "Este link no existe o dejó de estar disponible.",
+    errorCarrito: "No pudimos agregar al carrito. Intentá de nuevo.",
+  },
   /** Mensajes que devuelve la API del App Proxy. Los muestra el storefront. */
   api: {
     identidadFaltante:

@@ -111,6 +111,24 @@ const incluirItems = {
 // Operaciones
 // ---------------------------------------------------------------------------
 
+/**
+ * Busca una lista por su token público. No hace falta identidad: el token ES
+ * la credencial.
+ *
+ * Se exige que la lista pertenezca a la tienda desde la que llega la petición,
+ * para que un token de una tienda no se pueda abrir a través del proxy de otra.
+ */
+export async function buscarListaCompartida(
+  shopId: string,
+  token: unknown,
+) {
+  if (typeof token !== "string" || token.length < 20) return null;
+  return prisma.wishlist.findFirst({
+    where: { shareToken: token, shopId },
+    include: incluirItems,
+  });
+}
+
 export function listarListas(shopId: string, identidad: Identidad) {
   return prisma.wishlist.findMany({
     where: { shopId, ...filtroIdentidad(identidad) },
