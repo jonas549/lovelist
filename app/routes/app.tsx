@@ -1,10 +1,10 @@
 import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
-import { Outlet, redirect, useLoaderData, useRouteError } from "react-router";
+import { Outlet, useLoaderData, useRouteError } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 
 import { authenticate } from "../shopify.server";
-import { buscarShop } from "../proxy.server";
+import { buscarShop, confirmarInstalada } from "../proxy.server";
 import { sincronizarPlanSiHaceFalta, tienePlanActivo } from "../plan.server";
 import { t, ti } from "../i18n";
 
@@ -18,7 +18,22 @@ import { t, ti } from "../i18n";
 const SIN_PLAN = ["/app/plans", "/app/support"];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  // `redirect` sale de acá y NO de react-router. Dentro del admin embebido son
+  // dos cosas distintas: el de la librería conserva `shop`, `host` y
+  // `embedded` en el destino, y para peticiones embebidas o de datos redirige
+  // por App Bridge en vez de devolver un 302 que el iframe no sabe seguir.
+  //
+  // Usar el de react-router rompía la instalación: el redirect al paywall
+  // llegaba a /app/plans sin esos parámetros, la librería no podía autenticar,
+  // lanzaba su respuesta de rebote —que no lleva status, así que es 200— y el
+  // ErrorBoundary la pintaba como lo que era: el número 200, solo, en pantalla.
+  const { session, redirect } = await authenticate.admin(request);
+
+  // La app está instalada: si quedaba una marca de desinstalación vieja, era
+  // mentira. Se limpia acá porque es el único lugar donde lo sabemos con
+  // certeza; antes solo se limpiaba en las escrituras del storefront, que el
+  // propio paywall bloquea.
+  await confirmarInstalada(session.shop);
 
   const ruta = new URL(request.url).pathname;
   const libre = SIN_PLAN.some((p) => ruta === p || ruta.startsWith(`${p}/`));

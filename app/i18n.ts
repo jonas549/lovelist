@@ -117,8 +117,11 @@ export const es = {
     sinPlanTexto:
       "Los favoritos que tus compradores ya habían guardado siguen guardados y vuelven a estar disponibles apenas actives el plan. No se borra nada.",
 
+    // Nota discreta, no un cartel de error. Es lo primero que ve un revisor de
+    // Shopify si entra antes de que el plan esté publicado, y una pantalla en
+    // rojo se lee como app rota aunque el motivo sea de configuración.
     faltaHandle:
-      "Falta configurar la app para poder mostrar los planes. Escribinos a {correo} y lo resolvemos.",
+      "La suscripción se habilita en unos minutos. Si necesitas activarla ahora, escribinos a {correo}.",
 
     confirmandoTitulo: "Confirmando tu plan",
     confirmadoTitulo: "¡Listo! Tu plan está activo",

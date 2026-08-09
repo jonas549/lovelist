@@ -139,7 +139,17 @@ export async function marcarDesinstalada(shopDominio: string) {
 
   const actualizadas = await prisma.shop.updateMany({
     where: { domain: shopDominio },
-    data: { uninstalledAt: new Date() },
+    data: {
+      uninstalledAt: new Date(),
+      // Desinstalar es dejar de pagar: el plan baja. Y `planRevisadoAt` va a
+      // null para que el primer sondeo tras reinstalar consulte de verdad en
+      // vez de confiarse de la ventana de cinco minutos. Es la lección de
+      // DiscountFlow: sin eso, un merchant que reinstala con la suscripción
+      // viva puede pasar minutos viendo la app en pausa sin motivo.
+      plan: "FREE",
+      planActivatedAt: null,
+      planRevisadoAt: null,
+    },
   });
 
   return { sesiones, tiendaMarcada: actualizadas.count > 0 };

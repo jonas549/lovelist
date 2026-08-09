@@ -104,13 +104,33 @@ export async function leerSuscripcion(
       return { estado: "desconocido", motivo: "la respuesta no trajo currentAppInstallation" };
     }
 
-    const activas = (instalacion.activeSubscriptions ?? []).filter(
-      (s) => s.status === "ACTIVE",
-    );
+    const suscripciones = instalacion.activeSubscriptions ?? [];
+    const activas = suscripciones.filter((s) => s.status === "ACTIVE");
 
-    // Sin errores y sin suscripciones activas: esto NO es ambiguo. Es la
-    // confirmación de que la tienda no está pagando.
-    if (!activas.length) return { estado: "confirmado", handle: null };
+    // Una suscripción congelada o pendiente NO es "no tiene".
+    //
+    // FROZEN es un impago en curso: la tarjeta rebotó y Shopify está
+    // reintentando. Leerlo como "sin suscripción" le cortaría el servicio a un
+    // cliente que probablemente lo resuelve en horas. PENDING es una alta que
+    // el merchant todavía no aprobó, o que Shopify no terminó de registrar.
+    //
+    // En los dos casos hay algo en curso y la respuesta correcta es "no sé":
+    // se conserva lo que hubiera. Es la lección que DiscountFlow pagó cara.
+    if (!activas.length) {
+      const enCurso = suscripciones.find(
+        (s) => s.status === "FROZEN" || s.status === "PENDING",
+      );
+      if (enCurso) {
+        return {
+          estado: "desconocido",
+          motivo: `hay una suscripción en estado ${enCurso.status}`,
+        };
+      }
+
+      // Sin errores, sin activas y sin nada en curso: esto NO es ambiguo. Es
+      // la confirmación de que la tienda no está pagando.
+      return { estado: "confirmado", handle: null };
+    }
 
     for (const s of activas) {
       for (const item of s.lineItems ?? []) {

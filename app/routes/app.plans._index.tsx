@@ -79,17 +79,25 @@ export default function Planes() {
             </s-paragraph>
 
             {/* Sin el handle de la app no se puede armar la URL de precios de
-                Shopify. En vez de un enlace roto, se dice qué pasa y a dónde
-                escribir: el merchant no tiene forma de saber que el problema
-                es de configuración nuestra. */}
+                Shopify. La pantalla se ve igual —precio, qué incluye, botón— y
+                el botón queda deshabilitado con una nota discreta debajo.
+                Nunca un cartel de error: esto es lo primero que ve un revisor
+                de Shopify, y una pantalla en rojo se lee como app rota. */}
             {url ? (
               <s-button href={url} target="_blank" variant="primary">
                 {t("planes.elegir")}
               </s-button>
             ) : (
-              <s-banner tone="critical">
-                {ti("planes.faltaHandle", { correo })}
-              </s-banner>
+              <>
+                <s-button variant="primary" disabled>
+                  {t("planes.elegir")}
+                </s-button>
+                <s-paragraph>
+                  <s-text color="subdued">
+                    {ti("planes.faltaHandle", { correo })}
+                  </s-text>
+                </s-paragraph>
+              </>
             )}
           </s-section>
         </>

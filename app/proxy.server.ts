@@ -282,6 +282,31 @@ export function buscarShop(dominio: string) {
   return prisma.shop.findUnique({ where: { domain: dominio } });
 }
 
+/**
+ * La app está instalada: borra cualquier marca de desinstalación vieja.
+ *
+ * Se llama desde el admin, que es el único lugar donde lo sabemos con certeza:
+ * si `authenticate.admin` devolvió una sesión, la app está instalada.
+ *
+ * Antes esto solo pasaba en `obtenerOCrearShop`, o sea en las escrituras del
+ * storefront. Con el paywall esas escrituras están bloqueadas justo cuando la
+ * tienda no tiene plan, así que una tienda que desinstalaba y reinstalaba
+ * quedaba marcada como desinstalada para siempre.
+ *
+ * El `updateMany` con la marca en el `where` hace que no escriba nada en el
+ * caso normal, que es el 99,9% de las cargas del admin.
+ */
+export async function confirmarInstalada(dominio: string): Promise<void> {
+  try {
+    await prisma.shop.updateMany({
+      where: { domain: dominio, uninstalledAt: { not: null } },
+      data: { uninstalledAt: null },
+    });
+  } catch (e) {
+    console.warn("[proxy] no se pudo limpiar uninstalledAt", e);
+  }
+}
+
 /** Cada cuánto se refresca la marca de actividad del storefront. */
 const VENTANA_EMBED_MS = 60 * 60 * 1000;
 
