@@ -18,7 +18,11 @@
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: currentColor;
+  /* El merchant elige los colores en el app embed y llegan como variables CSS,
+     no por JavaScript: el bundle del storefront tiene techo y esto no gasta ni
+     un byte de ahi. Si no configuro nada, se hereda el color del texto del
+     tema, que es el comportamiento de siempre. */
+  color: var(--lovelist-color-inactivo, currentColor);
   cursor: pointer;
   line-height: 1;
   transition: transform 0.12s ease, color 0.12s ease;
@@ -46,7 +50,7 @@
 }
 
 .lovelist-corazon.lovelist-activo {
-  color: #e0245e;
+  color: var(--lovelist-color-activo, #e0245e);
 }
 
 .lovelist-corazon[data-lovelist-ocupado] {
@@ -528,6 +532,21 @@
   background: var(--lovelist-boton-fondo, color-mix(in srgb, currentColor 12%, transparent));
   color: var(--lovelist-boton-texto, inherit);
   font-weight: 600;
+}
+
+/* Cuando el merchant configuro la clase de botón de su tema, la decoración
+   propia se corre a un lado: manda la del tema. Se apagan solo las
+   propiedades que pelean —fondo, borde, radio, peso— y se dejan las de
+   layout, que el tema no necesariamente trae. */
+.lovelist-boton-principal.lovelist-boton-tema,
+.lovelist-boton-secundario.lovelist-boton-tema,
+.lovelist-boton-carrito.lovelist-boton-tema {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  font-weight: inherit;
+  padding: revert;
 }
 
 .lovelist-boton-secundario {

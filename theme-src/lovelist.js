@@ -351,6 +351,55 @@
     }
   }
 
+  /**
+   * Textos que pinta el SERVIDOR y el merchant puede haber cambiado.
+   *
+   * El título de la página de favoritos y las dos líneas de la vista compartida
+   * se renderizan del lado del servidor, y el servidor no puede leer los
+   * settings del app embed: viven en el `settings_data.json` del tema y llegar
+   * ahí pediría el scope `read_themes`, que no pedimos.
+   *
+   * Así que el servidor pinta el texto por omisión —correcto y en español, y
+   * visible aunque el visitante tenga el JavaScript apagado, que es la promesa
+   * del link que se abre desde WhatsApp— y acá lo cambiamos por el del merchant
+   * solo si lo personalizó. El peor caso es ver el de fábrica, que no es un
+   * error.
+   */
+  function aplicarTextosDelMerchant(raiz) {
+    var titulo = (raiz || document).querySelector("[data-lovelist-titulo]");
+    if (titulo && T.tituloPagina) titulo.textContent = T.tituloPagina;
+
+    todos("[data-lovelist-texto-de]", raiz).forEach(function (el) {
+      var clave = el.getAttribute("data-lovelist-texto-de");
+      if (clave && T[clave]) el.textContent = T[clave];
+    });
+  }
+
+  /**
+   * Le pega a nuestros botones la clase de botón del tema, si el merchant la
+   * configuró. Por omisión es "button", que es la de Dawn y la de la mayoría de
+   * los temas derivados; si el tema no la tiene, agregar una clase que no
+   * existe no hace nada.
+   *
+   * Cuando la clase se aplica, nuestra decoración se corre a un lado —de eso se
+   * encarga el CSS con `.lovelist-boton-tema`— para no pelear con la del tema.
+   */
+  function aplicarClaseDelTema(raiz) {
+    var clase = (cfg.claseBoton || "").trim();
+    if (!clase) return;
+
+    todos(
+      ".lovelist-boton-principal, .lovelist-boton-secundario, .lovelist-boton-carrito",
+      raiz,
+    ).forEach(function (b) {
+      if (b.classList.contains("lovelist-boton-tema")) return;
+      b.classList.add("lovelist-boton-tema");
+      clase.split(/\s+/).forEach(function (c) {
+        if (c) b.classList.add(c);
+      });
+    });
+  }
+
   /** Los precios llegan del servidor sin formato para poder formatearlos acá. */
   function formatearPreciosEnPantalla(raiz) {
     todos("[data-lovelist-precio]", raiz).forEach(function (el) {
@@ -567,12 +616,48 @@
   // Botón de corazón
   // -------------------------------------------------------------------------
 
-  var SVG_LLENO =
-    '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">' +
-    '<path d="M12 21s-7.5-4.9-9.6-9A5.6 5.6 0 0 1 12 5.7 5.6 5.6 0 0 1 21.6 12c-2.1 4.1-9.6 9-9.6 9z"/></svg>';
-  var SVG_VACIO =
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" focusable="false">' +
-    '<path d="M12 20.3S5.2 15.8 3.3 12.2A4.9 4.9 0 0 1 12 7.1a4.9 4.9 0 0 1 8.7 5.1c-1.9 3.6-8.7 8.1-8.7 8.1z"/></svg>';
+  /**
+   * Formas del ícono. Se guardan solo los trazados y el SVG se arma al vuelo:
+   * cuatro SVG completos escritos a mano costarían el triple de bytes, y el
+   * bundle del storefront tiene techo.
+   *
+   * El trazado "lleno" y el "línea" son distintos a propósito y no el mismo
+   * con otro relleno: un contorno necesita más aire para leerse al tamaño de
+   * un ícono.
+   */
+  var FORMAS = {
+    corazon: {
+      lleno: "M12 21s-7.5-4.9-9.6-9A5.6 5.6 0 0 1 12 5.7 5.6 5.6 0 0 1 21.6 12c-2.1 4.1-9.6 9-9.6 9z",
+      linea: "M12 20.3S5.2 15.8 3.3 12.2A4.9 4.9 0 0 1 12 7.1a4.9 4.9 0 0 1 8.7 5.1c-1.9 3.6-8.7 8.1-8.7 8.1z",
+    },
+    estrella: {
+      lleno: "M12 2.6l2.9 5.9 6.5.9-4.7 4.6 1.1 6.4-5.8-3-5.8 3 1.1-6.4L2.6 9.4l6.5-.9z",
+      linea: "M12 3.8l2.5 5.1 5.6.8-4.1 4 1 5.6-5-2.6-5 2.6 1-5.6-4.1-4 5.6-.8z",
+    },
+  };
+
+  function svgDe(lleno) {
+    var forma = FORMAS[cfg.icono] || FORMAS.corazon;
+    var d = lleno ? forma.lleno : forma.linea;
+    return (
+      '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" ' +
+      (lleno
+        ? 'fill="currentColor"'
+        : 'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"') +
+      '><path d="' +
+      d +
+      '"/></svg>'
+    );
+  }
+
+  /**
+   * Sin guardar siempre va en línea: si los dos estados fueran rellenos, la
+   * única diferencia sería el color, y el comprador que no distingue colores
+   * no vería ninguna. El merchant elige qué pasa al guardar.
+   */
+  function iconoDe(activo) {
+    return svgDe(activo && cfg.rellenarAlGuardar !== false);
+  }
 
   function crearBoton(datos) {
     var b = document.createElement("button");
@@ -584,7 +669,7 @@
     if (datos.productId) b.setAttribute("data-lovelist-producto", datos.productId);
     if (datos.variantId) b.setAttribute("data-lovelist-variante", datos.variantId);
     if (datos.handle) b.setAttribute("data-lovelist-handle", datos.handle);
-    b.innerHTML = SVG_VACIO;
+    b.innerHTML = iconoDe(false);
     return b;
   }
 
@@ -597,8 +682,8 @@
     btn.classList.toggle("lovelist-activo", activo);
 
     var icono = btn.querySelector(".lovelist-icono");
-    if (icono) icono.innerHTML = activo ? SVG_LLENO : SVG_VACIO;
-    else btn.innerHTML = activo ? SVG_LLENO : SVG_VACIO;
+    if (icono) icono.innerHTML = iconoDe(activo);
+    else btn.innerHTML = iconoDe(activo);
 
     var texto = btn.querySelector("[data-lovelist-texto]");
     if (texto) texto.textContent = etiqueta || "";
@@ -1080,6 +1165,9 @@
 
   function montarContador() {
     if (contador) return;
+    // El merchant puede no querer un ícono más en su encabezado. Si lo apaga,
+    // el panel sigue existiendo: se llega desde /apps/lovelist.
+    if (cfg.mostrarContador === false) return;
 
     contador = document.createElement("button");
     contador.type = "button";
@@ -1088,7 +1176,7 @@
     contador.setAttribute("aria-label", T.abrirFavoritos || "Abrir mis favoritos");
     contador.innerHTML =
       '<span class="lovelist-contador-icono">' +
-      SVG_VACIO +
+      iconoDe(false) +
       '</span><span class="lovelist-contador-numero" data-lovelist-numero>0</span>';
     contador.addEventListener("click", abrirDrawer);
 
@@ -1476,6 +1564,8 @@
     }
 
     formatearPreciosEnPantalla(paginaRaiz);
+    // La grilla se repinta entera, asi que los botones son nuevos cada vez.
+    aplicarClaseDelTema(paginaRaiz);
   }
 
   function tarjetaPagina(item, p) {
@@ -1557,6 +1647,7 @@
           "</a>" +
           "</div>";
         caja.hidden = false;
+        aplicarClaseDelTema(caja);
 
         var copiar = caja.querySelector("[data-lovelist-copiar]");
         if (copiar) {
@@ -1670,6 +1761,8 @@
 
       // La vista compartida ya viene con los precios sin formato del servidor.
       formatearPreciosEnPantalla(document);
+      aplicarTextosDelMerchant(document);
+      aplicarClaseDelTema(document);
 
       // Carga infinita, filtros AJAX, cambios de sección en el editor de temas.
       if (window.MutationObserver) {

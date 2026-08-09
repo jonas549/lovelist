@@ -64,9 +64,9 @@ export const loader = ({ request, params }: LoaderFunctionArgs) =>
 ${SCRIPT_NOINDEX}
 <div class="lovelist-pagina lovelist-pagina-compartida" data-lovelist-compartida>
   <header class="lovelist-pagina-cabecera">
-    <p class="lovelist-pagina-etiqueta">${escaparLiquid(t("pagina.listaCompartida"))}</p>
+    <p class="lovelist-pagina-etiqueta" data-lovelist-texto-de="listaCompartida">${escaparLiquid(t("pagina.listaCompartida"))}</p>
     <h1 class="lovelist-pagina-titulo">${escaparLiquid(lista.name)}</h1>
-    <p class="lovelist-pagina-nota">${escaparLiquid(t("pagina.soloLectura"))}</p>
+    <p class="lovelist-pagina-nota" data-lovelist-texto-de="soloLectura">${escaparLiquid(t("pagina.soloLectura"))}</p>
   </header>
   ${productos.length ? grilla(productos) : vacia()}
 </div>`;

@@ -19,8 +19,14 @@
  *   /?pagina&secciones-nulas hay panel, pero Shopify devuelve las secciones en
  *                            null: tampoco puede quedarse a medias, va a /cart
  *
- * Los dos últimos terminan navegando a propósito: aterrizar en /cart ES el
- * resultado. La página de destino la sirve este mismo script.
+ *   /?config-alt              el merchant cambió la configuración en el app
+ *                            embed: estrella en vez de corazón, sin rellenar
+ *                            al guardar y con el contador apagado
+ *   /?pagina&config-alt       lo mismo, para la clase de botón del tema
+ *
+ * Los dos que llevan `sin-drawer` y `secciones-nulas` terminan navegando a
+ * propósito: aterrizar en /cart ES el resultado. La página de destino la sirve
+ * este mismo script.
  *
  * Por qué existe: la primera versión de este banco daba todo en verde y aun así
  * se escaparon tres fallos a producción (los corazones no recordaban nada, el
@@ -55,8 +61,15 @@ async function textosDelEmbed() {
   const liquid = await readFile(ruta(EMBED), "utf8");
   const catalogo = JSON.parse(await readFile(ruta(LOCALES), "utf8")).lovelist;
 
-  // Cada línea del embed tiene la forma:  "clave": {{ 'lovelist.clave' | t | json }}
-  const claves = [...liquid.matchAll(/"(\w+)":\s*\{\{\s*'lovelist\.(\w+)'\s*\|\s*t/g)];
+  // Cada línea del embed tiene una de estas dos formas:
+  //
+  //   "clave": {{ block.settings.texto_clave | default: d_clave | json }}
+  //   "clave": {{ d_clave | json }}
+  //
+  // Las dos terminan en `d_<clave del catálogo> | json`, que es lo que se
+  // busca. La primera es un texto que el merchant puede editar desde el app
+  // embed; la segunda, uno que no.
+  const claves = [...liquid.matchAll(/"(\w+)":\s*\{\{[^}]*?d_(\w+)\s*\|\s*json\s*\}\}/g)];
   if (!claves.length) {
     throw new Error(`no se encontró ningún texto en ${EMBED}. ¿Cambió el formato?`);
   }

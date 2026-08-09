@@ -31,7 +31,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
     const cuerpo = `
 <div class="lovelist-pagina" data-lovelist-pagina>
   <header class="lovelist-pagina-cabecera">
-    <h1 class="lovelist-pagina-titulo">${escaparLiquid(t("app.nombre"))}</h1>
+    <h1 class="lovelist-pagina-titulo" data-lovelist-titulo>${escaparLiquid(t("pagina.titulo"))}</h1>
     <div class="lovelist-pagina-selector" data-lovelist-selector hidden></div>
   </header>
 

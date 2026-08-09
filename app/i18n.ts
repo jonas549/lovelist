@@ -37,6 +37,12 @@ export const es = {
     porEmail: "Compartir por email",
     mensajeCompartir: "Mirá mi lista de favoritos:",
     asuntoEmail: "Mi lista de favoritos",
+    // El título que ve el COMPRADOR. No es "Lovelist" a propósito: nuestra
+    // marca no tiene nada que hacer en la tienda de otro. Tiene que coincidir
+    // con el valor por omisión de `texto_tituloPagina` en el app embed, o el
+    // título parpadearía al cargar: el servidor pinta este y el JS lo cambia
+    // por el del merchant solo si lo personalizó.
+    titulo: "Mis favoritos",
     listaCompartida: "Lista compartida",
     soloLectura: "Estás viendo una lista que alguien compartió con vos.",
     noEncontrada: "Este link no existe o dejó de estar disponible.",

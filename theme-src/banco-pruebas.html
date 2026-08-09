@@ -139,6 +139,8 @@
   var SECCIONES_NULAS = /[?&]secciones-nulas/.test(location.search);
   // Los dos modos de arriba terminan navegando, asi que el clic va al final.
   var NAVEGA = SIN_DRAWER || SECCIONES_NULAS;
+  // Configuracion del merchant cambiada desde el app embed.
+  var CONFIG_ALT = /[?&]config-alt/.test(location.search);
   var ANON_SEMBRADO = "11111111-2222-4333-8444-555555555555";
   if (LOGUEADO || MERGE_FALLA) {
     // Como si hubiera guardado cosas de invitado y recien ahora iniciara sesion.
@@ -346,8 +348,15 @@
   // leyendo el embed y el catálogo reales. Cuando estaban copiados a mano el
   // banco se quedó sin los nueve textos que sumó la Fase 2.4 y pintó botones
   // vacíos dando todo en verde.
+  // CONFIG_ALT simula un merchant que cambio todo lo que se puede cambiar:
+  // estrella en vez de corazon, sin rellenar al guardar, contador apagado y
+  // sin clase de boton del tema.
   tagCfg.textContent = JSON.stringify({
     moneda: "ARS", idioma: "es-AR", clienteConectado: LOGUEADO || MERGE_FALLA,
+    icono: CONFIG_ALT ? "estrella" : "corazon",
+    rellenarAlGuardar: !CONFIG_ALT,
+    mostrarContador: !CONFIG_ALT,
+    claseBoton: CONFIG_ALT ? "" : "button",
     textos: __TEXTOS__
   });
   document.head.appendChild(tagCfg);
@@ -547,6 +556,15 @@ window.__resultado = null;
         // variante vendible: al carrito tiene que ir una sola vez.
         return { cond: ids.length === unicos.length && ids.length === 3,
                  extra: ids.join(",") }; });
+
+      ok(CONFIG_ALT
+        ? "sin clase configurada, los botones quedan con el estilo propio"
+        : "los botones llevan la clase de boton del tema", function () {
+        var b = raiz.querySelector(".lovelist-boton-principal");
+        if (!b) return { cond: false, extra: "no hay boton principal" };
+        var conTema = b.classList.contains("lovelist-boton-tema") &&
+                      b.classList.contains("button");
+        return { cond: CONFIG_ALT ? !conTema : conTema, extra: b.className }; });
 
       ok("todos los botones tienen etiqueta", function () {
         var mudos = botonesDe(raiz).filter(function (b) { return !etiquetaDe(b); });
@@ -776,6 +794,48 @@ window.__resultado = null;
         return { cond: pedidosProducto().length === 0, extra: JSON.stringify(pedidosProducto().map(function (p) { return p.url; })) }; });
       ok("los corazones quedan vacios", function () {
         return [].every.call(document.querySelectorAll("[data-lovelist-boton]"), function (b) { return b.getAttribute("aria-pressed") === "false"; }); });
+      out.push("");
+      out.push(fallos === 0 ? "TODO OK" : fallos + " FALLOS");
+      document.getElementById("resultados").textContent = out.join("\n");
+      window.__resultado = out.join("\n");
+      return;
+    }
+
+    // === Configuracion del app embed ===
+    //
+    // Todo esto llega por Liquid, no por red: son settings del embed que el
+    // merchant edita en el editor de temas. Se comprueba que el storefront los
+    // RESPETE, que es lo unico que el merchant ve.
+    out.push(CONFIG_ALT
+      ? "=== configuracion del merchant: estrella, en linea, sin contador ==="
+      : "=== configuracion del merchant: valores de fabrica ===");
+
+    var unCorazon = document.querySelector("[data-lovelist-boton]");
+
+    ok("usa la forma de icono configurada", function () {
+      var d = unCorazon ? (unCorazon.querySelector("path") || {}).getAttribute : null;
+      var trazado = unCorazon && unCorazon.querySelector("path")
+        ? unCorazon.querySelector("path").getAttribute("d") : "";
+      // La estrella arranca en "M12 2.6" o "M12 3.8"; el corazon, en "M12 2x".
+      var esEstrella = /^M12 [23]\.[68]/.test(trazado);
+      return { cond: CONFIG_ALT ? esEstrella : !esEstrella,
+               extra: trazado.slice(0, 24) }; });
+
+    ok(CONFIG_ALT ? "el contador NO se monta" : "el contador se monta", function () {
+      var hay = !!document.querySelector(".lovelist-contador");
+      return { cond: CONFIG_ALT ? !hay : hay, extra: "hay contador: " + hay }; });
+
+    ok("los textos salen del catalogo del embed", function () {
+      var etiqueta = unCorazon ? unCorazon.getAttribute("aria-label") : "";
+      return { cond: !!etiqueta && etiqueta.indexOf("favorit") >= 0, extra: etiqueta }; });
+
+
+    // En este modo el contador esta apagado a proposito, y buena parte de la
+    // suite lo usa para abrir el panel. Se corta aca: lo que faltaria ya lo
+    // cubren los otros modos con la configuracion de fabrica.
+    if (CONFIG_ALT) {
+      out.push("");
+      out.push("(para la clase de boton del tema: /?pagina&config-alt)");
       out.push("");
       out.push(fallos === 0 ? "TODO OK" : fallos + " FALLOS");
       document.getElementById("resultados").textContent = out.join("\n");

@@ -27,6 +27,9 @@
     "mensajeCompartir": "Mirá mi lista de favoritos:",
     "asuntoEmail": "Mi lista de favoritos",
     "errorCarrito": "No pudimos agregar al carrito. Intentá de nuevo.",
-    "errorCompartir": "No pudimos generar el link. Intentá de nuevo."
+    "errorCompartir": "No pudimos generar el link. Intentá de nuevo.",
+    "tituloPagina": "Mis favoritos",
+    "listaCompartida": "Lista compartida",
+    "soloLectura": "Estás viendo una lista que alguien compartió con vos."
   }
 }

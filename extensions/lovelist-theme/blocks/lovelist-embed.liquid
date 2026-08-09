@@ -2,50 +2,112 @@
   Lovelist — app embed block.
 
   Se activa desde el editor de temas y carga en todas las páginas. Trae el JS y
-  el CSS compartidos, el contador y el drawer. El botón de la página de producto
-  es un app block aparte, para que el merchant lo ponga donde quiera.
+  el CSS compartidos, el contador y el drawer. El botón de la página de
+  producto es un app block aparte, para que el merchant lo ponga donde quiera.
 
-  El JS y el CSS los declara el schema (`javascript` / `stylesheet`): Shopify los
-  inyecta con defer, así que no bloquean el render.
+  El JS y el CSS los declara el schema (`javascript` / `stylesheet`): Shopify
+  los inyecta con defer, así que no bloquean el render.
 
-  Acá no hay ninguna referencia al dominio de la app. Todo el tráfico sale hacia
-  /apps/lovelist, que es el App Proxy.
+  ACÁ VIVE LA CONFIGURACIÓN. No en la base de datos: lo que el storefront
+  necesita para pintarse se renderiza en Liquid y llega con la página. Sin
+  red, sin parpadeo, y el merchant la edita donde ya está parado cuando coloca
+  el bloque. `Shop.settings` no guarda nada de esto.
+
+  Los colores viajan por variables CSS y no por JavaScript, a propósito: el
+  bundle del storefront tiene techo y cada byte que se pueda mover a Liquid es
+  un byte que no gastamos ahí.
+
+  El bloque del botón de producto hereda todo esto sin configurarse aparte: su
+  ícono lo pinta este mismo JS y sus textos salen de esta misma config.
+
+  Acá no hay ninguna referencia al dominio de la app. Todo el tráfico sale
+  hacia /apps/lovelist, que es el App Proxy.
 {% endcomment %}
+
+{%- liquid
+  assign d_guardar = 'lovelist.guardar' | t
+  assign d_guardado = 'lovelist.guardado' | t
+  assign d_quitar = 'lovelist.quitar' | t
+  assign d_misFavoritos = 'lovelist.misFavoritos' | t
+  assign d_abrirFavoritos = 'lovelist.abrirFavoritos' | t
+  assign d_cerrar = 'lovelist.cerrar' | t
+  assign d_vacio = 'lovelist.vacio' | t
+  assign d_vacioAyuda = 'lovelist.vacioAyuda' | t
+  assign d_cargando = 'lovelist.cargando' | t
+  assign d_errorGuardar = 'lovelist.errorGuardar' | t
+  assign d_errorQuitar = 'lovelist.errorQuitar' | t
+  assign d_errorCargar = 'lovelist.errorCargar' | t
+  assign d_listaLlena = 'lovelist.listaLlena' | t
+  assign d_demasiadoRapido = 'lovelist.demasiadoRapido' | t
+  assign d_verTodos = 'lovelist.verTodos' | t
+  assign d_agotado = 'lovelist.agotado' | t
+  assign d_alCarrito = 'lovelist.alCarrito' | t
+  assign d_agregarTodo = 'lovelist.agregarTodo' | t
+  assign d_quitarDeLista = 'lovelist.quitarDeLista' | t
+  assign d_compartir = 'lovelist.compartir' | t
+  assign d_copiarLink = 'lovelist.copiarLink' | t
+  assign d_copiado = 'lovelist.copiado' | t
+  assign d_porWhatsapp = 'lovelist.porWhatsapp' | t
+  assign d_porEmail = 'lovelist.porEmail' | t
+  assign d_mensajeCompartir = 'lovelist.mensajeCompartir' | t
+  assign d_asuntoEmail = 'lovelist.asuntoEmail' | t
+  assign d_errorCarrito = 'lovelist.errorCarrito' | t
+  assign d_errorCompartir = 'lovelist.errorCompartir' | t
+  assign d_tituloPagina = 'lovelist.tituloPagina' | t
+  assign d_listaCompartida = 'lovelist.listaCompartida' | t
+  assign d_soloLectura = 'lovelist.soloLectura' | t
+-%}
+
+<style>
+  /* Los valores del merchant entran acá y no por JS. Si deja uno vacío, el
+     respaldo de la propia `var()` deja el aspecto de fábrica. */
+  :root {
+    {% if block.settings.color_inactivo != blank %}--lovelist-color-inactivo: {{ block.settings.color_inactivo }};{% endif %}
+    {% if block.settings.color_activo != blank %}--lovelist-color-activo: {{ block.settings.color_activo }};{% endif %}
+  }
+</style>
 
 <script type="application/json" id="lovelist-config">
   {
     "moneda": {{ shop.currency | json }},
     "idioma": {{ request.locale.iso_code | json }},
     "clienteConectado": {% if customer %}true{% else %}false{% endif %},
+    "icono": {{ block.settings.icono | default: 'corazon' | json }},
+    "rellenarAlGuardar": {% if block.settings.estilo == 'linea' %}false{% else %}true{% endif %},
+    "mostrarContador": {% if block.settings.mostrar_contador == false %}false{% else %}true{% endif %},
+    "claseBoton": {{ block.settings.clase_boton | default: 'button' | json }},
     "textos": {
-      "guardar": {{ 'lovelist.guardar' | t | json }},
-      "guardado": {{ 'lovelist.guardado' | t | json }},
-      "quitar": {{ 'lovelist.quitar' | t | json }},
-      "misFavoritos": {{ 'lovelist.misFavoritos' | t | json }},
-      "abrirFavoritos": {{ 'lovelist.abrirFavoritos' | t | json }},
-      "cerrar": {{ 'lovelist.cerrar' | t | json }},
-      "vacio": {{ 'lovelist.vacio' | t | json }},
-      "vacioAyuda": {{ 'lovelist.vacioAyuda' | t | json }},
-      "cargando": {{ 'lovelist.cargando' | t | json }},
-      "errorGuardar": {{ 'lovelist.errorGuardar' | t | json }},
-      "errorQuitar": {{ 'lovelist.errorQuitar' | t | json }},
-      "errorCargar": {{ 'lovelist.errorCargar' | t | json }},
-      "listaLlena": {{ 'lovelist.listaLlena' | t | json }},
-      "demasiadoRapido": {{ 'lovelist.demasiadoRapido' | t | json }},
-      "verTodos": {{ 'lovelist.verTodos' | t | json }},
-      "agotado": {{ 'lovelist.agotado' | t | json }},
-      "alCarrito": {{ 'lovelist.alCarrito' | t | json }},
-      "agregarTodo": {{ 'lovelist.agregarTodo' | t | json }},
-      "quitarDeLista": {{ 'lovelist.quitarDeLista' | t | json }},
-      "compartir": {{ 'lovelist.compartir' | t | json }},
-      "copiarLink": {{ 'lovelist.copiarLink' | t | json }},
-      "copiado": {{ 'lovelist.copiado' | t | json }},
-      "porWhatsapp": {{ 'lovelist.porWhatsapp' | t | json }},
-      "porEmail": {{ 'lovelist.porEmail' | t | json }},
-      "mensajeCompartir": {{ 'lovelist.mensajeCompartir' | t | json }},
-      "asuntoEmail": {{ 'lovelist.asuntoEmail' | t | json }},
-      "errorCarrito": {{ 'lovelist.errorCarrito' | t | json }},
-      "errorCompartir": {{ 'lovelist.errorCompartir' | t | json }}
+      "guardar": {{ block.settings.texto_guardar | default: d_guardar | json }},
+      "guardado": {{ block.settings.texto_guardado | default: d_guardado | json }},
+      "quitar": {{ block.settings.texto_quitar | default: d_quitar | json }},
+      "misFavoritos": {{ block.settings.texto_misFavoritos | default: d_misFavoritos | json }},
+      "abrirFavoritos": {{ block.settings.texto_abrirFavoritos | default: d_abrirFavoritos | json }},
+      "cerrar": {{ block.settings.texto_cerrar | default: d_cerrar | json }},
+      "vacio": {{ block.settings.texto_vacio | default: d_vacio | json }},
+      "vacioAyuda": {{ block.settings.texto_vacioAyuda | default: d_vacioAyuda | json }},
+      "cargando": {{ d_cargando | json }},
+      "errorGuardar": {{ block.settings.texto_errorGuardar | default: d_errorGuardar | json }},
+      "errorQuitar": {{ block.settings.texto_errorQuitar | default: d_errorQuitar | json }},
+      "errorCargar": {{ block.settings.texto_errorCargar | default: d_errorCargar | json }},
+      "listaLlena": {{ d_listaLlena | json }},
+      "demasiadoRapido": {{ d_demasiadoRapido | json }},
+      "verTodos": {{ block.settings.texto_verTodos | default: d_verTodos | json }},
+      "agotado": {{ block.settings.texto_agotado | default: d_agotado | json }},
+      "alCarrito": {{ block.settings.texto_alCarrito | default: d_alCarrito | json }},
+      "agregarTodo": {{ block.settings.texto_agregarTodo | default: d_agregarTodo | json }},
+      "quitarDeLista": {{ block.settings.texto_quitarDeLista | default: d_quitarDeLista | json }},
+      "compartir": {{ block.settings.texto_compartir | default: d_compartir | json }},
+      "copiarLink": {{ block.settings.texto_copiarLink | default: d_copiarLink | json }},
+      "copiado": {{ d_copiado | json }},
+      "porWhatsapp": {{ d_porWhatsapp | json }},
+      "porEmail": {{ d_porEmail | json }},
+      "mensajeCompartir": {{ block.settings.texto_mensajeCompartir | default: d_mensajeCompartir | json }},
+      "asuntoEmail": {{ block.settings.texto_asuntoEmail | default: d_asuntoEmail | json }},
+      "errorCarrito": {{ block.settings.texto_errorCarrito | default: d_errorCarrito | json }},
+      "errorCompartir": {{ d_errorCompartir | json }},
+      "tituloPagina": {{ block.settings.texto_tituloPagina | default: d_tituloPagina | json }},
+      "listaCompartida": {{ block.settings.texto_listaCompartida | default: d_listaCompartida | json }},
+      "soloLectura": {{ block.settings.texto_soloLectura | default: d_soloLectura | json }}
     }
   }
 </script>
@@ -60,7 +122,83 @@
     {
       "type": "paragraph",
       "content": "Activá este bloque para que Lovelist funcione en toda la tienda: el contador, el panel de favoritos y los corazones en las páginas de colección. El botón de la página de producto se agrega aparte, desde el bloque \"Botón de favoritos\"."
-    }
+    },
+    { "type": "header", "content": "Apariencia" },
+    {
+      "type": "select",
+      "id": "icono",
+      "label": "Ícono",
+      "default": "corazon",
+      "options": [
+        { "value": "corazon", "label": "Corazón" },
+        { "value": "estrella", "label": "Estrella" }
+      ]
+    },
+    {
+      "type": "select",
+      "id": "estilo",
+      "label": "Al guardar, el ícono",
+      "info": "Sin guardar siempre se ve en línea, para que se note la diferencia.",
+      "default": "relleno",
+      "options": [
+        { "value": "relleno", "label": "Se rellena" },
+        { "value": "linea", "label": "Queda en línea y cambia de color" }
+      ]
+    },
+    {
+      "type": "color",
+      "id": "color_activo",
+      "label": "Color cuando está guardado",
+      "default": "#e0245e"
+    },
+    {
+      "type": "color",
+      "id": "color_inactivo",
+      "label": "Color cuando no está guardado",
+      "info": "Dejalo vacío para que herede el color del texto de tu tema."
+    },
+    {
+      "type": "checkbox",
+      "id": "mostrar_contador",
+      "label": "Mostrar el contador en el encabezado",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "clase_boton",
+      "label": "Clase CSS de los botones de tu tema",
+      "info": "Sirve para que los botones de Lovelist se vean como los de tu tienda. \"button\" funciona en Dawn y en la mayoría de los temas. Si el tuyo usa otra, ponela acá. Vacío deja el estilo propio de Lovelist.",
+      "default": "button"
+    },
+    { "type": "header", "content": "Textos: botón de favoritos" },
+    { "type": "text", "id": "texto_guardar", "label": "Guardar", "default": "Guardar en favoritos" },
+    { "type": "text", "id": "texto_guardado", "label": "Ya guardado", "default": "Guardado en favoritos" },
+    { "type": "text", "id": "texto_quitar", "label": "Quitar", "default": "Quitar de favoritos" },
+    { "type": "header", "content": "Textos: panel lateral" },
+    { "type": "text", "id": "texto_misFavoritos", "label": "Título del panel", "default": "Mis favoritos" },
+    { "type": "text", "id": "texto_abrirFavoritos", "label": "Abrir el panel", "default": "Abrir mis favoritos" },
+    { "type": "text", "id": "texto_cerrar", "label": "Cerrar", "default": "Cerrar" },
+    { "type": "text", "id": "texto_verTodos", "label": "Ver todos", "default": "Ver todos mis favoritos" },
+    { "type": "text", "id": "texto_vacio", "label": "Sin favoritos", "default": "Todavía no guardaste nada." },
+    { "type": "text", "id": "texto_vacioAyuda", "label": "Sin favoritos, ayuda", "default": "Tocá el corazón en cualquier producto para guardarlo acá." },
+    { "type": "header", "content": "Textos: página de favoritos" },
+    { "type": "text", "id": "texto_tituloPagina", "label": "Título de la página", "default": "Mis favoritos", "info": "Es el título que ve el comprador en /apps/lovelist." },
+    { "type": "text", "id": "texto_alCarrito", "label": "Agregar al carrito", "default": "Agregar al carrito" },
+    { "type": "text", "id": "texto_agregarTodo", "label": "Agregar todo", "default": "Agregar todo al carrito" },
+    { "type": "text", "id": "texto_quitarDeLista", "label": "Quitar de la lista", "default": "Quitar" },
+    { "type": "text", "id": "texto_agotado", "label": "Sin stock", "default": "Sin stock" },
+    { "type": "header", "content": "Textos: compartir" },
+    { "type": "text", "id": "texto_compartir", "label": "Compartir", "default": "Compartir esta lista" },
+    { "type": "text", "id": "texto_copiarLink", "label": "Copiar link", "default": "Copiar link" },
+    { "type": "text", "id": "texto_mensajeCompartir", "label": "Mensaje al compartir", "default": "Mirá mi lista de favoritos:" },
+    { "type": "text", "id": "texto_asuntoEmail", "label": "Asunto del email", "default": "Mi lista de favoritos" },
+    { "type": "text", "id": "texto_listaCompartida", "label": "Encabezado de lista compartida", "default": "Lista compartida" },
+    { "type": "text", "id": "texto_soloLectura", "label": "Aclaración de lista compartida", "default": "Estás viendo una lista que alguien compartió con vos." },
+    { "type": "header", "content": "Textos: errores" },
+    { "type": "text", "id": "texto_errorGuardar", "label": "No se pudo guardar", "default": "No pudimos guardar el producto. Intentá de nuevo." },
+    { "type": "text", "id": "texto_errorQuitar", "label": "No se pudo quitar", "default": "No pudimos quitar el producto. Intentá de nuevo." },
+    { "type": "text", "id": "texto_errorCargar", "label": "No se pudieron cargar", "default": "No pudimos cargar tus favoritos." },
+    { "type": "text", "id": "texto_errorCarrito", "label": "No se pudo agregar al carrito", "default": "No pudimos agregar al carrito. Intentá de nuevo." }
   ]
 }
 {% endschema %}

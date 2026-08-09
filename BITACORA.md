@@ -937,6 +937,40 @@ principio:
   refleja nunca.
 - **Nada de `catch` que solo hace `console.error`.**
 
+### Pendientes de lanzamiento (requisitos de la App Store)
+
+Salieron de leer la documentación vigente el 2026-08-09. **Ninguno es de la
+Fase 2.5**: son condiciones para publicar, y hay que resolverlas antes de
+mandar la app a revisión.
+
+**Política de privacidad publicada.** El listado la exige y hoy no existe. Hace
+falta una URL pública. Es fácil de escribir —no guardamos datos personales, ni
+nombre ni email de nadie, solo IDs— pero tiene que estar publicada y dicha en
+los términos que pide Shopify.
+
+**Assets del listado.** Ícono de 1200×1200, capturas, medios de la funcionalidad,
+introducción de 100 caracteres, detalle de 500, y un **screencast completo del
+proceso de instalación y uso, en inglés o subtitulado en inglés**. Ese último es
+el que más trabajo lleva y el que más se subestima.
+
+**Medición de Lighthouse del storefront.** Shopify exige que la app **no baje
+más de 10 puntos** el score de Lighthouse de la tienda. Nunca lo medimos. Hay
+que hacerlo con la app activa y sin ella, sobre la misma página, y comparar.
+
+**Métricas del admin.** LCP ≤ 2,5 s, CLS ≤ 0,1 e INP ≤ 200 ms, a percentil 75
+sobre 28 días y con mínimo 100 mediciones. Se miden solas con App Bridge; hay
+que mirarlas en el Partner Dashboard una vez que haya tráfico.
+
+**Puertas que no dependen del código:** 50 instalaciones netas en tiendas de
+pago, 5 reseñas y un mínimo de calificación. Son de Built for Shopify y llegan
+después de publicar.
+
+**Lo que sí cumplimos ya:** theme app extensions en vez de scripts, sin tocar la
+Asset API, webhooks GDPR reales, `app/uninstalled`, cero datos personales, OAuth
+inmediato, y cobro por Managed Pricing (Fase 2.6).
+
+---
+
 ### Fuera del alcance del MVP
 
 Alertas de vuelta a stock, avisos de bajada de precio, emails de recordatorio,
@@ -1027,6 +1061,8 @@ por todos:
 | `/?pagina` | página completa: grilla, carrito, compartir, quitar |
 | `/?pagina&sin-drawer` | tema sin panel de carrito: tiene que terminar en `/cart` |
 | `/?pagina&secciones-nulas` | hay panel pero Shopify devuelve `sections: null`: también va a `/cart` |
+| `/?config-alt` | el merchant cambió la config del embed: estrella, en línea, sin contador |
+| `/?pagina&config-alt` | lo mismo, para la clase de botón del tema |
 
 Los dos últimos **terminan navegando a propósito**: aterrizar en `/cart` es el
 resultado que se comprueba, y la página de destino la sirve el propio banco.
