@@ -1,6 +1,33 @@
+import { readFileSync } from "node:fs";
+
 import { reactRouter } from "@react-router/dev/vite";
 import { defineConfig, type UserConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
+
+/**
+ * El handle de la app, leido de shopify.app.toml.
+ *
+ * Es la fuente de verdad: el mismo valor que Shopify usa para armar la URL de
+ * la pagina de precios, versionado en el repo y desplegado con el codigo. Se
+ * hornea en el build para que la pantalla de planes no dependa de que alguien
+ * se acuerde de definir SHOPIFY_APP_HANDLE en el hosting. Cuando falto, el
+ * boton de "Cambiar a Pro" quedaba deshabilitado en produccion: la app entera
+ * andaba y nadie podia pagar.
+ *
+ * La variable de entorno sigue mandando si existe, para poder apuntar a otra
+ * app sin tocar el archivo.
+ */
+function handleDelToml(): string {
+  try {
+    const toml = readFileSync("shopify.app.toml", "utf8");
+    // El handle de la app es la primera clave `handle` del archivo, la de
+    // nivel superior. Las extensiones tienen la suya, mas abajo y anidada.
+    const m = /^\s*handle\s*=\s*"([^"]+)"/m.exec(toml);
+    return m ? m[1] : "";
+  } catch {
+    return "";
+  }
+}
 
 // Related: https://github.com/remix-run/remix/issues/2835#issuecomment-1144102176
 // Replace the HOST env var with SHOPIFY_APP_URL so that it doesn't break the Vite server.
@@ -53,6 +80,9 @@ if (host === "localhost") {
 }
 
 export default defineConfig({
+  define: {
+    __APP_HANDLE__: JSON.stringify(handleDelToml()),
+  },
   server: {
     allowedHosts: [host],
     cors: {

@@ -258,15 +258,29 @@ export function limiteItemsPorLista(shop: Pick<Shop, "plan"> | null): number {
 /**
  * El handle de la app, para armar la URL de la página de precios de Shopify.
  *
- * Sin valor de reserva a propósito. Un valor inventado en el código produciría
- * un enlace que lleva a una página que no existe, y el merchant no tendría
- * forma de saber que el problema es de configuración nuestra. Si falta, la
- * pantalla de planes lo dice.
+ * Sale de `shopify.app.toml`, horneado en el build: es el mismo valor que usa
+ * Shopify, está versionado y viaja con el código. La variable de entorno gana
+ * si existe, para poder apuntar a otra app sin tocar el archivo.
+ *
+ * Antes dependía **sólo** de la variable, sin reserva, con el argumento de que
+ * un valor inventado llevaría a una página inexistente. El argumento vale para
+ * un valor inventado; el del toml no lo es. Y el costo del faltante era el peor
+ * posible: en producción la app andaba entera y el botón de pagar estaba
+ * apagado.
+ *
+ * Devuelve `null` si tampoco está en el toml, y ahí la pantalla de planes lo
+ * dice en vez de armar un enlace roto.
  */
 export function handleDeLaApp(): string | null {
   // eslint-disable-next-line no-undef
-  const handle = process.env.SHOPIFY_APP_HANDLE?.trim();
-  return handle ? handle : null;
+  const deEntorno = process.env.SHOPIFY_APP_HANDLE?.trim();
+  if (deEntorno) return deEntorno;
+
+  // `__APP_HANDLE__` lo reemplaza Vite en el build. En un proceso que no pasó
+  // por Vite —un script suelto de scripts/— no existe, y eso no puede tirar un
+  // ReferenceError.
+  const delToml = typeof __APP_HANDLE__ === "string" ? __APP_HANDLE__.trim() : "";
+  return delToml ? delToml : null;
 }
 
 export function urlDePlanes(shopDominio: string): string | null {
