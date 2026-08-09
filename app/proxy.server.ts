@@ -296,26 +296,34 @@ const VENTANA_EMBED_MS = 60 * 60 * 1000;
  * del storefront es criterio de revisión de Shopify: no vamos a gastarlo en
  * una marca de tiempo.
  *
- * No se espera el resultado ni se propaga el error a propósito. Esto es
- * telemetría para el admin; que falle no puede romperle los favoritos a nadie.
+ * **Se espera el resultado, aunque sea telemetría.** La primera versión lanzaba
+ * el UPDATE sin esperarlo, para no sumarle ni un milisegundo a la respuesta.
+ * En Vercel eso no funciona: la función se congela apenas responde y la
+ * escritura nunca llega a la base. Se comprobó en la tienda real —el evento de
+ * carrito, que sí se espera, quedó registrado; esta marca no—. En un entorno
+ * sin servidor, lo que no se espera no pasa.
+ *
+ * El costo real es una escritura por hora y por tienda, que es nada. El error
+ * sí se traga: es telemetría para el admin y no puede romperle los favoritos a
+ * nadie.
  */
-export function anotarActividadDelEmbed(shop: {
+export async function anotarActividadDelEmbed(shop: {
   id: string;
   embedVistoAt: Date | null;
-}): void {
+}): Promise<void> {
   const ahora = Date.now();
   if (shop.embedVistoAt && ahora - shop.embedVistoAt.getTime() < VENTANA_EMBED_MS) {
     return;
   }
 
-  void prisma.shop
-    .update({
+  try {
+    await prisma.shop.update({
       where: { id: shop.id },
       data: { embedVistoAt: new Date(ahora) },
-    })
-    .catch(() => {
-      /* la marca se pierde y se vuelve a intentar en la próxima visita */
     });
+  } catch {
+    /* la marca se pierde y se vuelve a intentar en la próxima visita */
+  }
 }
 
 /**

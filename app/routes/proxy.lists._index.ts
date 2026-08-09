@@ -24,7 +24,7 @@ export const loader = ({ request }: LoaderFunctionArgs) =>
     // Esta llamada la hace el app embed en CADA carga de página del
     // storefront, así que es la señal más fiable de que está activo. Es lo que
     // le permite al dashboard mostrar el estado real sin pedir `read_themes`.
-    anotarActividadDelEmbed(shop);
+    await anotarActividadDelEmbed(shop);
 
     const listas = await listarListas(shop.id, identidad);
     return json({
