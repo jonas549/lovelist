@@ -134,10 +134,18 @@
     // Ademas los dos resuelven a la misma variante vendible cuando el item no
     // trae una elegida, asi que "agregar todo" tiene que deduplicar antes de
     // mandar o el carrito recibe la misma variante dos veces.
+    // Y ademas TRES productos distintos y comprables a la vez (pre4, pre5 y el
+    // par pre1/pre2), con precios y variantes distintas. Que el banco nunca
+    // haya tenido tres identidades distintas es la razon por la que la
+    // identidad de producto se rompio dos veces sin que nadie avisara: con dos
+    // tarjetas, un bug que hace que todas resuelvan a la ultima se nota poco;
+    // con una sola, no se nota nunca.
     GUARDADOS = [
       { id: "pre1", productId: "gid://shopify/Product/111111", variantId: null, addedAt: "" },
       { id: "pre2", productId: "gid://shopify/Product/111111",
         variantId: "gid://shopify/ProductVariant/9100", addedAt: "" },
+      { id: "pre4", productId: "gid://shopify/Product/333333", variantId: null, addedAt: "" },
+      { id: "pre5", productId: "gid://shopify/Product/444444", variantId: null, addedAt: "" },
       { id: "pre3", productId: "gid://shopify/Product/222222", variantId: null, addedAt: "" }
     ];
     // Doble del <cart-drawer> de Dawn. Expone la MISMA superficie publica que
@@ -241,12 +249,20 @@
       // agotado. Ojo al tocar estos datos: una version anterior las dejo del
       // mismo alto por casualidad y la comprobacion de alineacion pasaba sobre
       // una grilla que en la tienda se veia torcida.
+      //
+      // Cada item tiene su PROPIO precio y su PROPIA variante. Antes todos
+      // compartian "1999.00", asi que un bug que hiciera resolver todas las
+      // tarjetas al mismo producto no cambiaba ni un pixel del precio.
       var POR_ITEM = {
-        pre1: { title: "Producto 1", handle: "p1", disponible: true,
+        pre1: { title: "Producto 1", handle: "p1", disponible: true, precio: "1999.00",
                 varianteTitulo: null, variantIdParaCarrito: "9000" },
-        pre2: { title: "Producto 1", handle: "p1", disponible: true,
+        pre2: { title: "Producto 1", handle: "p1", disponible: true, precio: "1999.00",
                 varianteTitulo: "Negro / M", variantIdParaCarrito: "9000" },
-        pre3: { title: "Producto 2", handle: "p2", disponible: false,
+        pre4: { title: "Producto 3", handle: "p3", disponible: true, precio: "3100.00",
+                varianteTitulo: null, variantIdParaCarrito: "9300" },
+        pre5: { title: "Producto 4", handle: "p4", disponible: true, precio: "2780.00",
+                varianteTitulo: null, variantIdParaCarrito: "9400" },
+        pre3: { title: "Producto 2", handle: "p2", disponible: false, precio: "2500.00",
                 varianteTitulo: null, variantIdParaCarrito: null }
       };
       return j({ ok: true, products: GUARDADOS.map(function (it) {
@@ -254,7 +270,7 @@
         return { clave: it.productId + "|" + (it.variantId || ""),
                  productId: it.productId, variantId: it.variantId || null,
                  title: d.title, handle: d.handle, url: "/products/" + d.handle,
-                 imagen: null, imagenAlt: "", precio: "1999.00", moneda: "ARS",
+                 imagen: null, imagenAlt: "", precio: d.precio, moneda: "ARS",
                  disponible: d.disponible, varianteTitulo: d.varianteTitulo,
                  variantIdParaCarrito: d.variantIdParaCarrito };
       }) });
@@ -373,7 +389,75 @@ window.__resultado = null;
 
       ok("pinta la grilla con los productos del servidor", function () {
         var n = raiz.querySelectorAll(".lovelist-tarjeta").length;
-        return { cond: n === 3, extra: n }; });
+        return { cond: n === 5, extra: n }; });
+
+      // --- Identidad de cada tarjeta ---
+      //
+      // La identidad de producto se rompio dos veces: una vez porque el
+      // servidor indexaba por productId y dos favoritos del mismo articulo se
+      // pisaban, y otra reportada como "todas las tarjetas resuelven a la
+      // ultima". Las dos veces el banco dio verde, porque nunca tuvo tres
+      // identidades distintas y comprables al mismo tiempo, ni precios
+      // distintos entre si.
+      //
+      // Se comprueba tarjeta por tarjeta, en orden, y no en conjunto: un
+      // recuento agregado no distingue "cada una la suya" de "todas la misma".
+
+      var ESPERADO = [
+        { titulo: "Producto 1", variante: null,        precio: "1999.00", carrito: "9000" },
+        { titulo: "Producto 1", variante: "Negro / M", precio: "1999.00", carrito: "9000" },
+        { titulo: "Producto 3", variante: null,        precio: "3100.00", carrito: "9300" },
+        { titulo: "Producto 4", variante: null,        precio: "2780.00", carrito: "9400" },
+        { titulo: "Producto 2", variante: null,        precio: "2500.00", carrito: null }
+      ];
+
+      function leerTarjetas() {
+        return [].slice.call(raiz.querySelectorAll(".lovelist-tarjeta")).map(function (t) {
+          var v = t.querySelector(".lovelist-tarjeta-variante");
+          var b = t.querySelector("[data-lovelist-al-carrito]");
+          return {
+            titulo: t.querySelector(".lovelist-tarjeta-titulo").textContent.trim(),
+            href: t.querySelector(".lovelist-tarjeta-titulo").getAttribute("href"),
+            variante: v ? v.textContent.trim() : null,
+            precio: t.querySelector(".lovelist-tarjeta-precio").getAttribute("data-lovelist-precio"),
+            carrito: b ? b.getAttribute("data-lovelist-al-carrito") : null
+          };
+        });
+      }
+
+      ESPERADO.forEach(function (esp, i) {
+        var nombre = "tarjeta " + (i + 1) + " (" + esp.titulo +
+          (esp.variante ? " / " + esp.variante : "") + ") lleva LO SUYO";
+        ok(nombre, function () {
+          var t = leerTarjetas()[i];
+          if (!t) return { cond: false, extra: "no existe" };
+          var bien = t.titulo === esp.titulo && t.variante === esp.variante &&
+                     t.precio === esp.precio && t.carrito === esp.carrito;
+          return { cond: bien,
+                   extra: "muestra titulo=" + t.titulo + " variante=" + t.variante +
+                          " precio=" + t.precio + " carrito=" + t.carrito +
+                          " | esperaba precio=" + esp.precio + " carrito=" + esp.carrito }; });
+      });
+
+      // La comprobacion que caza toda esta familia de bugs de una: si dos
+      // tarjetas de productos DISTINTOS terminan con el mismo precio o la misma
+      // variante, algo las hizo resolver a la misma entrada. Dos tarjetas del
+      // mismo producto si pueden compartirlos, y por eso se agrupa por enlace.
+      ok("ningun par de tarjetas de productos distintos comparte precio ni variante", function () {
+        var t = leerTarjetas();
+        var choques = [];
+        for (var i = 0; i < t.length; i++) {
+          for (var k = i + 1; k < t.length; k++) {
+            if (t[i].href === t[k].href) continue;
+            if (t[i].precio === t[k].precio) {
+              choques.push(t[i].titulo + " y " + t[k].titulo + " comparten precio " + t[i].precio);
+            }
+            if (t[i].carrito && t[i].carrito === t[k].carrito) {
+              choques.push(t[i].titulo + " y " + t[k].titulo + " comparten variante " + t[i].carrito);
+            }
+          }
+        }
+        return { cond: choques.length === 0, extra: choques.join(" | ") }; });
 
       ok("el mismo producto guardado dos veces son DOS tarjetas", function () {
         var titulos = [].slice.call(raiz.querySelectorAll(".lovelist-tarjeta-titulo"))
@@ -415,9 +499,13 @@ window.__resultado = null;
         var ultima = tarjetas[tarjetas.length - 1];
         return { cond: ultima.querySelector(".lovelist-agotado") && !ultima.querySelector("[data-lovelist-al-carrito]"),
                  extra: ultima.textContent.replace(/\s+/g, " ").slice(0, 60) }; });
-      ok("solo el comprable entra en 'agregar todo'", function () {
+      ok("'agregar todo' lleva TODAS las comprables, y solo el agotado queda afuera", function () {
         var b = raiz.querySelector("[data-lovelist-agregar-todo]");
-        return { cond: b && b.getAttribute("data-lovelist-agregar-todo") === "9000", extra: b && b.getAttribute("data-lovelist-agregar-todo") }; });
+        var ids = b ? b.getAttribute("data-lovelist-agregar-todo") : null;
+        // Las tres variantes distintas. Que estuvieran las tres y no una sola
+        // es justo lo que fallaba cuando todas las tarjetas resolvian a la
+        // misma entrada.
+        return { cond: ids === "9000,9300,9400", extra: ids }; });
 
       ok("y la misma variante no entra dos veces", function () {
         var b = raiz.querySelector("[data-lovelist-agregar-todo]");
@@ -425,7 +513,7 @@ window.__resultado = null;
         var unicos = ids.filter(function (x, i) { return ids.indexOf(x) === i; });
         // pre1 y pre2 son dos favoritos distintos pero apuntan a la misma
         // variante vendible: al carrito tiene que ir una sola vez.
-        return { cond: ids.length === unicos.length && ids.length === 1,
+        return { cond: ids.length === unicos.length && ids.length === 3,
                  extra: ids.join(",") }; });
 
       ok("todos los botones tienen etiqueta", function () {
@@ -453,7 +541,7 @@ window.__resultado = null;
         // va por tarjeta, no por producto. Dos favoritos del mismo articulo
         // tienen cada uno el suyo.
         return { cond: conBoton.length === tarjetas.length - agotadas.length &&
-                       conBoton.length >= 2 && visible,
+                       conBoton.length >= 4 && visible,
                  extra: "tarjetas=" + tarjetas.length + " conBoton=" + conBoton.length +
                         " agotadas=" + agotadas.length + " visibles=" + visible }; });
 
@@ -560,7 +648,7 @@ window.__resultado = null;
         var quedan = raiz.querySelectorAll(".lovelist-tarjeta").length;
         // Quitar el favorito sin variante no puede llevarse puesto al que si
         // la tiene: son dos items distintos del mismo producto.
-        return { cond: d.length === 1 && quedan === 2, extra: d.length + " / " + quedan }; });
+        return { cond: d.length === 1 && quedan === 4, extra: d.length + " / " + quedan }; });
 
       ok("cero errores de JS", function () {
         return { cond: window.__errores.length === 0, extra: JSON.stringify(window.__errores) }; });
