@@ -619,6 +619,65 @@ pantalla— y no que el atributo se haya quitado.
 
 ---
 
+### 4.12 El favorito con el producto de uno y la variante de otro
+
+**Cómo se manifestó.** Una lista con Red Wing ($310) y Dawson ($278) mostraba
+Red Wing a **$250**, que es el precio de Antique Drawers — un producto que ni
+siquiera estaba en la lista. "Agregar al carrito" en Red Wing metía Antique
+Drawers. "Agregar todo" metía Antique y Dawson.
+
+Se leía como "las tarjetas resuelven al producto equivocado", y la hipótesis
+natural —la de Jonas y la mía— era un caché que no se invalidaba al quitar un
+favorito. **Era falsa**: quitar items no reproduce nada, y armar listas desde
+cero tampoco. Por eso no se pudo reproducir durante dos rondas.
+
+**Causa real, en dos mitades.**
+
+*Cómo se creaba la fila mala.* `varianteViva()` en el JS del storefront: si el
+corazón no estaba dentro de un formulario de carrito, subía hasta la `section`
+más cercana y se quedaba con el **primer** `form[action*="/cart/add"]` que
+encontrara; y si no había, con el `?variant=` de la URL. En la ficha de un
+producto, las dos cosas son la variante del producto **de la página**.
+
+Así que dar corazón a un recomendado —o a cualquier tarjeta de otro producto
+dentro de una ficha— guardaba un favorito con el `productId` de la tarjeta y
+el `variantId` de la página.
+
+*Por qué se veía así.* `resolverProductos()` confiaba en el `variantId`
+guardado sin comprobar que fuera **de ese producto**. Entonces la entrada salía
+con el título, la imagen y el enlace del producto guardado —esos vienen del
+producto— pero con el **precio y la variante de carrito del ajeno**. De ahí que
+el título estuviera bien y el precio mal, que es lo que hacía que el síntoma
+pareciera otra cosa.
+
+**Cómo se arregló.** Las dos mitades, porque una sola no alcanza:
+
+1. `varianteViva()` solo usa las fuentes de página —el formulario de la sección
+   y el `?variant=`— cuando el botón es el del producto de la página, y eso se
+   sabe comparando su `data-lovelist-handle` con el handle de la URL. Para el
+   resto vale lo que traiga el propio botón, que en una tarjeta de colección es
+   nada: quien da corazón en una grilla no eligió talle ni color.
+2. `resolverProductos()` ignora una variante que no pertenece al producto
+   guardado. La consulta ya traía `product { id }`, así que es una condición.
+   Esto **repara las filas ya guardadas**, que siguen en la base de cada tienda
+   y no se van a poder migrar una por una.
+
+**Lecciones.**
+
+- **Los datos se pueden guardar mal, no solo mostrar mal.** Todas las
+  comprobaciones apuntaban a la lectura; ninguna miraba qué se escribía. El
+  banco ahora comprueba el cuerpo del `POST` al guardar desde la ficha de otro
+  producto.
+- **Una hipótesis del que reporta es un dato, no una conclusión.** La de quitar
+  items era razonable y era falsa; seguirla costó una ronda. Lo que la cerró fue
+  construir a mano la fila sospechada —producto de uno, variante de otro— y ver
+  si daba los tres síntomas. Daba los tres.
+- **Confiar en un dato propio tampoco es gratis.** El `variantId` venía de
+  nuestra base, no de un tercero, y aun así estaba mal. Un identificador que
+  apunta a otra entidad hay que validarlo contra ella cuando se resuelve.
+
+---
+
 ### 4.9 Otros errores más chicos, con su lección
 
 **El `@@unique` con `NULL` no impedía duplicados.** En Postgres `NULL != NULL`,

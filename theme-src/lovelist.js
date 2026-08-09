@@ -734,17 +734,59 @@
    * seguir los cambios del selector, nos ahorra depender de los eventos que
    * cada tema inventa por su cuenta.
    */
-  function varianteViva(btn) {
-    var form = btn.closest ? btn.closest("form[action*='/cart/add']") : null;
-    if (!form) {
-      var seccion = btn.closest ? btn.closest("[data-section-id], section, main") : null;
-      form = seccion ? seccion.querySelector("form[action*='/cart/add']") : null;
-    }
-    var campo = form ? form.querySelector("[name='id']") : null;
-    if (campo && campo.value) return String(campo.value);
+  /**
+   * ¿Este botón es el del producto que la página está mostrando?
+   *
+   * Hace falta porque el formulario de carrito y el `?variant=` de la URL
+   * hablan del producto de la PÁGINA, y en una ficha puede haber tarjetas de
+   * otros productos —recomendados, "completá el look", vistos recientemente—
+   * con su propio corazón. Para esas, la variante de la página no es suya.
+   */
+  function esElProductoDeLaPagina(btn) {
+    if (!handleActual) return false;
+    var handle = btn.getAttribute("data-lovelist-handle");
+    return Boolean(handle) && handle === handleActual;
+  }
 
-    var enUrl = new URLSearchParams(window.location.search).get("variant");
-    if (enUrl) return enUrl;
+  /**
+   * Variante seleccionada en el momento del clic, y SOLO si es de este
+   * producto.
+   *
+   * Acá vivía el peor bug de la sesión. La versión anterior, si el botón no
+   * estaba dentro de un formulario de carrito, subía hasta la sección y se
+   * quedaba con el PRIMER formulario `/cart/add` que encontrara; y si no,
+   * con el `?variant=` de la URL. En la ficha de un producto, cualquiera de
+   * los dos es la variante del producto de la ficha.
+   *
+   * Entonces guardar un recomendado desde la ficha de otro producto creaba un
+   * favorito con el producto de uno y la variante de otro. Al mostrarlo, el
+   * título salía bien —lo da el producto— pero el precio y el "agregar al
+   * carrito" salían del ajeno: la tarjeta parecía apuntar a otro producto.
+   *
+   * Las fuentes de página ahora se usan solo cuando el botón es el del
+   * producto de la página. Para el resto vale lo que traiga el propio botón,
+   * que en una tarjeta de colección es nada, y nada es la respuesta correcta:
+   * quien da corazón en una grilla no eligió talle ni color.
+   */
+  function varianteViva(btn) {
+    // Dentro de su propio formulario: esa variante es suya, sin dudas.
+    var propio = btn.closest ? btn.closest("form[action*='/cart/add']") : null;
+    var campoPropio = propio ? propio.querySelector("[name='id']") : null;
+    if (campoPropio && campoPropio.value) return String(campoPropio.value);
+
+    if (esElProductoDeLaPagina(btn)) {
+      var seccion = btn.closest
+        ? btn.closest("[data-section-id], section, main")
+        : null;
+      var form = seccion
+        ? seccion.querySelector("form[action*='/cart/add']")
+        : null;
+      var campo = form ? form.querySelector("[name='id']") : null;
+      if (campo && campo.value) return String(campo.value);
+
+      var enUrl = new URLSearchParams(window.location.search).get("variant");
+      if (enUrl) return enUrl;
+    }
 
     return btn.getAttribute("data-lovelist-variante") || null;
   }

@@ -90,6 +90,37 @@
   </section>
 
   <p id="parrafo">Mirá también <a href="/products/mencion-en-texto">esta mención</a> en el texto.</p>
+
+  <!-- ============ FICHA DE PRODUCTO CON RECOMENDADOS ============
+       Esto reproduce el caso que corrompio favoritos en la tienda real.
+
+       Es la ficha de "El producto de esta pagina" —con su formulario de
+       carrito y su variante seleccionada, 999999— y adentro, una seccion de
+       recomendados con la tarjeta de OTRO producto.
+
+       Guardar el recomendado tiene que guardar SU producto y NINGUNA variante:
+       la variante 999999 es del producto de la pagina, no de la tarjeta. Si se
+       cuela, el favorito queda apuntando al producto equivocado y en la lista
+       aparece con el precio y el "agregar al carrito" del ajeno. -->
+  <section id="ficha" data-section-id="ficha-producto">
+    <h2>El producto de esta pagina</h2>
+    <form action="/cart/add" method="post">
+      <input type="hidden" name="id" value="999999">
+      <button type="submit">Add to cart</button>
+    </form>
+
+    <div id="recomendados">
+      <h3>Te puede interesar</h3>
+      <div class="product-card" id="recomendado">
+        <a href="/products/recomendado-en-ficha"><img alt=""></a>
+        <h3>Recomendado en ficha</h3><span class="price">$55.00</span>
+      </div>
+      <div class="product-card" id="recomendado-dos">
+        <a href="/products/recomendado-dos"><img alt=""></a>
+        <h3>Otro recomendado</h3><span class="price">$66.00</span>
+      </div>
+    </div>
+  </section>
 </main>
 
 <pre id="resultados">corriendo…</pre>
@@ -118,7 +149,8 @@
   var IDS = { "dawn-uno": 111111, "dawn-dos": 222222, "simple-con-id": 778899,
               "tarjeta-enlace": 333333, "doble-enlace": 444444,
               "llegado-por-ajax": 555555, "banner-hidratacion": 666666,
-              "destacado-del-menu": 777777, "mencion-en-texto": 888888 };
+              "destacado-del-menu": 777777, "mencion-en-texto": 888888,
+              "recomendado-en-ficha": 555001, "recomendado-dos": 555002 };
 
   // ESTADO PREVIO: como si el comprador ya hubiera guardado "dawn-uno" antes.
   // Esto es lo que el banco anterior nunca probaba.
@@ -650,6 +682,29 @@ window.__resultado = null;
         // la tiene: son dos items distintos del mismo producto.
         return { cond: d.length === 1 && quedan === 4, extra: d.length + " / " + quedan }; });
 
+      // Quitar no puede desalinear a los que quedan. Se comprueba contra lo que
+      // cada uno tenia ANTES de borrar, no contra una lista escrita a mano: lo
+      // que importa es que nadie herede los datos del que se fue.
+      ok("los que quedan conservan CADA UNO su precio y su variante", function () {
+        var quedan = leerTarjetas();
+        var borrado = ESPERADO[0];
+        var problemas = [];
+        quedan.forEach(function (t, i) {
+          var esp = ESPERADO[i + 1];
+          if (!esp) return;
+          if (t.precio !== esp.precio || t.carrito !== esp.carrito) {
+            problemas.push(t.titulo + " quedo con precio=" + t.precio + " carrito=" + t.carrito +
+                           " y esperaba precio=" + esp.precio + " carrito=" + esp.carrito);
+          }
+        });
+        // Y explicitamente: nadie se quedo con lo del borrado.
+        quedan.forEach(function (t) {
+          if (t.href !== "/products/p1" && t.carrito === borrado.carrito) {
+            problemas.push(t.titulo + " heredo la variante del favorito borrado");
+          }
+        });
+        return { cond: problemas.length === 0, extra: problemas.join(" | ") }; });
+
       ok("cero errores de JS", function () {
         return { cond: window.__errores.length === 0, extra: JSON.stringify(window.__errores) }; });
 
@@ -814,6 +869,44 @@ window.__resultado = null;
     await esperar(600);
     ok("quitar lo deja vacio", function () {
       return { cond: btn.getAttribute("aria-pressed") === "false", extra: btn.getAttribute("aria-pressed") }; });
+
+    // === Identidad del favorito al GUARDAR ===
+    //
+    // El caso que corrompio favoritos en la tienda: guardar un recomendado que
+    // vive dentro de la ficha de OTRO producto. La variante seleccionada de la
+    // pagina (999999) es del producto de la ficha, no de la tarjeta.
+    //
+    // Si esa variante se cuela, el favorito queda con el producto de uno y la
+    // variante de otro, y al mostrarlo sale con el precio y el "agregar al
+    // carrito" del ajeno. El titulo sigue bien —lo da el producto— y por eso
+    // se lee como "la tarjeta apunta a otro producto" en vez de como un dato
+    // mal guardado.
+    out.push("=== identidad al guardar dentro de una ficha ===");
+    var reco = document.querySelector('#recomendado [data-lovelist-boton]');
+    ok("el recomendado dentro de la ficha recibe corazon", function () {
+      return { cond: !!reco, extra: reco ? "si" : "no lo encontro" }; });
+
+    if (reco) {
+      var antesPost = PEDIDOS.filter(function (x) { return x.method === "POST"; }).length;
+      reco.click();
+      await esperar(700);
+
+      ok("guarda SU producto, no el de la ficha", function () {
+        var posts = PEDIDOS.filter(function (x) { return x.method === "POST"; });
+        var c = posts.length > antesPost ? JSON.parse(posts[antesPost].body) : {};
+        return { cond: c.productId === "gid://shopify/Product/555001",
+                 extra: JSON.stringify(c) }; });
+
+      ok("y NO se lleva la variante del producto de la pagina", function () {
+        var posts = PEDIDOS.filter(function (x) { return x.method === "POST"; });
+        var c = posts.length > antesPost ? JSON.parse(posts[antesPost].body) : {};
+        // 999999 es la variante del formulario de la ficha. No es suya.
+        return { cond: !c.variantId,
+                 extra: "guardo variantId=" + c.variantId + " (999999 es del producto de la ficha)" }; });
+
+      reco.click();
+      await esperar(600);
+    }
 
     out.push("=== fallo de red ===");
     window.FALLAR_ESCRITURAS = true;

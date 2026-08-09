@@ -175,9 +175,23 @@ export async function resolverProductos(
     // Si el favorito guardó una variante concreta, manda esa: es la que el
     // comprador eligió. Solo se ignora para el carrito si ya no se puede
     // comprar, pero el nombre se sigue mostrando.
-    const variante = ref.variantId
+    const guardada = ref.variantId
       ? variantesPorId.get(ref.variantId)
       : undefined;
+
+    // La variante tiene que ser DE ESTE producto.
+    //
+    // No es paranoia: hubo una versión del JS del storefront que, al guardar
+    // desde la ficha de otro producto, se llevaba la variante de la página. El
+    // favorito quedaba con el producto de uno y la variante de otro, y acá se
+    // mostraba con el título del suyo pero el precio y el "agregar al carrito"
+    // del ajeno — parecía que la tarjeta apuntaba a otro producto.
+    //
+    // Aquel bug ya está arreglado en origen, pero las filas que dejó siguen en
+    // la base de cada tienda y no las vamos a poder migrar una por una. Con
+    // esto se muestran como lo que son: el producto guardado, sin variante.
+    const variante =
+      guardada && guardada.product?.id === ref.productId ? guardada : undefined;
 
     if (variante) {
       // Un producto sin opciones reales igual tiene una variante, y Shopify la
