@@ -678,6 +678,36 @@ pareciera otra cosa.
 
 ---
 
+### 4.13 En Vercel, lo que no se espera no pasa
+
+**Cómo se manifestó.** El dashboard decía "todavía no detectamos actividad"
+después de visitar el storefront con el embed activo. En la base, el evento de
+carrito de esa misma visita estaba registrado y `Shop.embedVistoAt` seguía en
+`null`.
+
+**Causa real.** La marca se escribía sin esperarla:
+
+```ts
+void prisma.shop.update({ ... }).catch(() => {});
+```
+
+La idea era no sumarle ni un milisegundo a una respuesta del storefront. En un
+entorno sin servidor eso no funciona: la función **se congela apenas responde**
+y la escritura nunca sale. El evento de carrito sobrevivió porque su ruta sí lo
+espera.
+
+**Cómo se arregló.** Se espera. El costo real es una escritura por hora y por
+tienda, porque el tope de una hora ya estaba: la optimización que motivó el
+`void` la hacía el tope, no el no esperar.
+
+**Lección.** Fuera de un servidor de proceso largo, el trabajo en segundo plano
+después de la respuesta **no existe**. Si algo tiene que pasar, se espera; si no
+vale la pena esperarlo, no vale la pena hacerlo. Y el contraste sirvió de
+diagnóstico: dos escrituras en la misma petición, una esperada y otra no, y solo
+llegó la esperada.
+
+---
+
 ### 4.9 Otros errores más chicos, con su lección
 
 **El `@@unique` con `NULL` no impedía duplicados.** En Postgres `NULL != NULL`,
