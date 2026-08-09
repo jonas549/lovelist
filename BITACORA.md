@@ -708,6 +708,51 @@ llegó la esperada.
 
 ---
 
+### 4.14 La instalación mostraba el número "200" y nada más
+
+**Cómo se manifestó.** Instalar la app y entrar mostraba una pantalla con el
+texto **"200"** en negrita, solo. Es lo primero que hace un revisor de Shopify,
+así que era motivo de rechazo directo.
+
+**Causa real.** El paywall del layout hacía `throw redirect("/app/plans")` con
+el `redirect` de **react-router**. Dentro del admin embebido ese no sirve: la
+librería de Shopify trae el suyo, que sale de `authenticate.admin(request)`, y
+su documentación de tipos dice para qué está — *"ensuring that the appropriate
+parameters are set for embedded apps"*.
+
+Leyendo `helpers/redirect.js` de la librería, hace dos cosas que el otro no:
+copia `shop`, `host` y `embedded` al destino cuando es del mismo origen, y para
+peticiones embebidas o de datos redirige por App Bridge en vez de devolver un
+302 que el iframe no sabe seguir.
+
+La cadena, medida paso a paso:
+
+1. El redirect mandaba a `/app/plans` **pelado**, sin `shop` ni `host`.
+2. Comprobado con `curl`: esa URL sin parámetros devuelve **410** y el rebote
+   de la librería, porque no puede autenticar.
+3. Ese rebote lo produce `renderAppBridge`, que hace
+   `throw new Response(html, { headers })` **sin `status`, o sea 200**.
+4. `boundary.error` de la librería renderiza `error.data` como HTML. Cuando el
+   cuerpo se pierde en la conversión a error, queda el status: `"200"`.
+
+O sea que el número en pantalla era **el status de una respuesta interna de
+Shopify que quedó huérfana**.
+
+**Cómo se arregló.** `const { session, redirect } = await authenticate.admin()`.
+Era el único `redirect` de react-router que quedaba en el admin.
+
+**Lección.** En un admin embebido, redirigir no es devolver un 302. Cuando una
+librería expone su propio helper para algo que el framework ya trae, casi
+siempre es porque el del framework no alcanza — y conviene leer por qué antes
+de usar el genérico.
+
+**Y una segunda, sobre el síntoma:** un número suelto en pantalla no es un
+error de red ni un fallo de renderizado. Es casi siempre un status que alguien
+pintó como si fuera contenido. Buscar quién lanza una Response sin `status`
+llevó directo a la causa.
+
+---
+
 ### 4.9 Otros errores más chicos, con su lección
 
 **El `@@unique` con `NULL` no impedía duplicados.** En Postgres `NULL != NULL`,
