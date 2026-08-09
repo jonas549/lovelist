@@ -16,7 +16,12 @@ import {
   type EstadoPrimerosPasos,
 } from "../onboarding.server";
 import { resolverProductos } from "../productos.server";
-import { LIMITE_ITEMS_FREE, limiteItemsPorLista, tienePlanActivo } from "../plan.server";
+import {
+  LIMITE_ITEMS_FREE,
+  LIMITE_ITEMS_PRO,
+  limiteItemsPorLista,
+  tienePlanActivo,
+} from "../plan.server";
 import { t, ti } from "../i18n";
 
 type Deseado = {
@@ -56,6 +61,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       deseados: [] as Deseado[],
       listasLlenas: 0,
       limiteFree: LIMITE_ITEMS_FREE,
+      limitePro: LIMITE_ITEMS_PRO,
       pro: false,
     };
   }
@@ -102,6 +108,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     deseados,
     listasLlenas,
     limiteFree: LIMITE_ITEMS_FREE,
+    limitePro: LIMITE_ITEMS_PRO,
     pro: tienePlanActivo(shop),
   };
 };
@@ -255,7 +262,16 @@ function PrimerosPasos({
 }
 
 export default function Index() {
-  const { pasos, enlaces, numeros, deseados, listasLlenas, limiteFree, pro } =
+  const {
+    pasos,
+    enlaces,
+    numeros,
+    deseados,
+    listasLlenas,
+    limiteFree,
+    limitePro,
+    pro,
+  } =
     useLoaderData<typeof loader>();
 
   return (
@@ -268,7 +284,13 @@ export default function Index() {
       {!pro && listasLlenas > 0 ? (
         <s-section heading={t("planes.avisoTitulo")}>
           <s-paragraph>
-            {ti("planes.avisoTexto", { n: listasLlenas, limite: limiteFree })}
+            {listasLlenas === 1
+              ? ti("planes.avisoTextoUna", { limite: limiteFree, pro: limitePro })
+              : ti("planes.avisoTextoVarias", {
+                  n: listasLlenas,
+                  limite: limiteFree,
+                  pro: limitePro,
+                })}
           </s-paragraph>
           <s-button href="/app/plans" variant="primary">
             {t("planes.avisoBoton")}

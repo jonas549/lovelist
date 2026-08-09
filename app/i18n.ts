@@ -139,7 +139,7 @@ export const es = {
       "El plan Pro se habilita en unos minutos. Si necesitas activarlo ahora, escribinos a {correo}.",
 
     confirmadoTitulo: "¡Listo! Tu plan Pro está activo",
-    confirmadoTexto: "Tus compradores ya pueden guardar sin límite.",
+    confirmadoTexto: "Tus compradores ya pueden guardar hasta {pro} productos por lista.",
     confirmadoIr: "Ir al inicio",
     noConfirmadoTitulo: "Todavía no vemos tu suscripción",
     noConfirmadoTexto:
@@ -148,8 +148,13 @@ export const es = {
 
     // Aviso del dashboard, cuando el límite del gratuito empieza a estorbar.
     avisoTitulo: "Hay compradores que llegaron al límite",
-    avisoTexto:
-      "{n} de tus listas alcanzaron los {limite} productos del plan Gratis y no pueden guardar más. Con Pro guardan sin límite.",
+    // Dos formas porque con una sola lista el texto queda mal escrito —"1 de
+    // tus listas alcanzaron"—, y el aviso más probable es justo el de la
+    // primera lista que llega al tope.
+    avisoTextoUna:
+      "Una de tus listas alcanzó los {limite} productos del plan Gratis y no puede guardar más. Con Pro entran hasta {pro}.",
+    avisoTextoVarias:
+      "{n} de tus listas alcanzaron los {limite} productos del plan Gratis y no pueden guardar más. Con Pro entran hasta {pro}.",
     avisoBoton: "Ver el plan Pro",
   },
   /** Pantalla de soporte. */

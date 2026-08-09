@@ -4,8 +4,8 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
 import { buscarShop } from "../proxy.server";
-import { sincronizarPlan, tienePlanActivo } from "../plan.server";
-import { t } from "../i18n";
+import { LIMITE_ITEMS_PRO, sincronizarPlan, tienePlanActivo } from "../plan.server";
+import { t, ti } from "../i18n";
 
 /**
  * Vuelta desde la página de precios de Shopify.
@@ -27,17 +27,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const shop = await buscarShop(session.shop);
   const alDia = shop ? await sincronizarPlan(shop) : null;
 
-  return { activo: tienePlanActivo(alDia) };
+  return { activo: tienePlanActivo(alDia), limitePro: LIMITE_ITEMS_PRO };
 };
 
 export default function ConfirmarPlan() {
-  const { activo } = useLoaderData<typeof loader>();
+  const { activo, limitePro } = useLoaderData<typeof loader>();
 
   return (
     <s-page heading={t("planes.titulo")}>
       {activo ? (
         <s-section heading={t("planes.confirmadoTitulo")}>
-          <s-paragraph>{t("planes.confirmadoTexto")}</s-paragraph>
+          <s-paragraph>
+            {ti("planes.confirmadoTexto", { pro: limitePro })}
+          </s-paragraph>
           <s-button href="/app" variant="primary">
             {t("planes.confirmadoIr")}
           </s-button>
