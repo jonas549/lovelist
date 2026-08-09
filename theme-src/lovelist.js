@@ -491,6 +491,17 @@
       .then(function (respuesta) {
         pintarContador();
 
+        // Le avisamos al servidor que esto salio de Lovelist. Es la unica
+        // metrica que le muestra al merchant que la app le mueve algo.
+        //
+        // Va DESPUES de que el carrito respondio que si, y su fallo se traga:
+        // una metrica no puede romperle la compra a nadie. Y no manda quien
+        // fue, solo que variante: no guardamos datos personales.
+        api("/eventos", {
+          method: "POST",
+          body: { variantIds: items.map(function (i) { return String(i.id); }) },
+        }).catch(function () {});
+
         // Se exige que las secciones hayan venido de verdad. Sin esto el fallo
         // quedaba escondido: Shopify respondía con `sections: null`, el tema
         // tiraba una excepción que nosotros atrapábamos, y el comprador veía

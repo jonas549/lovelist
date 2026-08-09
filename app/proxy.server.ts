@@ -281,6 +281,43 @@ export function buscarShop(dominio: string) {
   return prisma.shop.findUnique({ where: { domain: dominio } });
 }
 
+/** Cada cuánto se refresca la marca de actividad del storefront. */
+const VENTANA_EMBED_MS = 60 * 60 * 1000;
+
+/**
+ * Anota que el storefront de esta tienda nos habló.
+ *
+ * Es como el dashboard sabe que el app embed está activo sin pedir el scope
+ * `read_themes`: con el embed encendido, cada carga de página del storefront
+ * llama a /apps/lovelist/lists.
+ *
+ * Se escribe como mucho una vez por hora. Sin ese tope sería un UPDATE por
+ * cada página que ve cualquier comprador de cualquier tienda, y el rendimiento
+ * del storefront es criterio de revisión de Shopify: no vamos a gastarlo en
+ * una marca de tiempo.
+ *
+ * No se espera el resultado ni se propaga el error a propósito. Esto es
+ * telemetría para el admin; que falle no puede romperle los favoritos a nadie.
+ */
+export function anotarActividadDelEmbed(shop: {
+  id: string;
+  embedVistoAt: Date | null;
+}): void {
+  const ahora = Date.now();
+  if (shop.embedVistoAt && ahora - shop.embedVistoAt.getTime() < VENTANA_EMBED_MS) {
+    return;
+  }
+
+  void prisma.shop
+    .update({
+      where: { id: shop.id },
+      data: { embedVistoAt: new Date(ahora) },
+    })
+    .catch(() => {
+      /* la marca se pierde y se vuelve a intentar en la próxima visita */
+    });
+}
+
 /**
  * Para escrituras. La Fase 1 creó el modelo Shop pero nada escribía en él.
  *

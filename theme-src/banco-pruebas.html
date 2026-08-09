@@ -309,6 +309,9 @@
                  variantIdParaCarrito: d.variantIdParaCarrito };
       }) });
     }
+    if (u.indexOf("/apps/lovelist/eventos") === 0) {
+      return j({ ok: true, registrados: 1 }, 201);
+    }
     if (u.indexOf("/apps/lovelist/merge") === 0) {
       if (MERGE_FALLA) return j({ ok: false, code: "errorInterno", message: "Algo salió mal." }, 500);
       return j({ ok: true, listasMovidas: 1, listasFusionadas: 0, itemsMovidos: 2, itemsDuplicados: 0 });
@@ -655,6 +658,19 @@ window.__resultado = null;
           var c = PEDIDOS.filter(function (p) { return p.url.indexOf("/cart/add.js") === 0; });
           var b = c.length ? JSON.parse(c[0].body) : {};
           return { cond: b.sections_url === "/", extra: "sections_url=" + b.sections_url }; });
+
+        // La metrica del dashboard. Va DESPUES de que el carrito respondio que
+        // si, nunca antes: contar un agregado que fallo seria mentirle al
+        // merchant. Y no manda quien fue, solo que variante.
+        ok("avisa al servidor del agregado, con la variante y sin quien", function () {
+          var e = PEDIDOS.filter(function (p) { return p.url.indexOf("/apps/lovelist/eventos") === 0; });
+          if (!e.length) return { cond: false, extra: "no se registro el evento" };
+          var c = JSON.parse(e[0].body);
+          var soloVariantes = Object.keys(c).every(function (k) {
+            return k === "variantIds" || k === "anonymousId";
+          });
+          return { cond: e.length === 1 && c.variantIds && c.variantIds[0] === "9000" && soloVariantes,
+                   extra: JSON.stringify(c) }; });
 
         ok("le entrega el resultado al panel del tema, que se abre", function () {
           var r = window.DRAWER.render;

@@ -43,12 +43,43 @@ model Shop {
   planActivatedAt DateTime?
   lastSyncAt      DateTime?
   settings        Json?
+  /// Última vez que el storefront de esta tienda nos habló.
+  ///
+  /// Es como sabemos que el app embed está activo, sin pedir el scope
+  /// `read_themes`: con el embed encendido, cada carga de página del
+  /// storefront llama a /apps/lovelist/lists. Si hace mucho que no lo vemos,
+  /// no afirmamos que esté apagado —puede que nadie haya visitado la tienda—,
+  /// solo que no detectamos actividad.
+  embedVistoAt    DateTime?
   /// Lo marca el webhook app/uninstalled. Se limpia solo si la tienda vuelve.
   uninstalledAt   DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   wishlists Wishlist[]
+  eventos   EventoCarrito[]
+}
+
+/// Un clic en "agregar al carrito" desde Lovelist.
+///
+/// NO es una conversión y no hay que llamarla así: no sabemos si la compra se
+/// concretó. Saberlo pediría datos de pedidos, que son Protected Customer Data
+/// y disparan un proceso de aprobación que decidimos evitar.
+///
+/// No se guarda quién lo hizo. Solo qué producto y cuándo: alcanza para la
+/// métrica y nos mantiene sin datos personales, que es la regla del proyecto.
+model EventoCarrito {
+  id        String   @id @default(cuid())
+  shopId    String
+  /// La variante numérica que se agregó. Es lo único que el storefront sabe en
+  /// ese momento: el botón lleva la variante, no el producto. Alcanza para
+  /// contar, que es todo lo que esta métrica hace.
+  variantId String
+  creadoAt  DateTime @default(now())
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@index([shopId, creadoAt])
 }
 
 /// Una lista de favoritos. Pertenece a un cliente registrado (customerId) o a

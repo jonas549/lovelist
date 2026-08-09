@@ -19,6 +19,55 @@ export const es = {
     cancelar: "Cancelar",
     errorGenerico: "Ocurrió un error. Intentá de nuevo.",
   },
+  /** Guía de primeros pasos del dashboard. */
+  inicio: {
+    titulo: "Primeros pasos",
+    subtitulo:
+      "Lovelist no aparece en tu tienda hasta que completes estos dos pasos.",
+    listo: "Listo",
+    pendiente: "Pendiente",
+    sinVerificar: "No lo podemos verificar",
+    completo: "Todo listo. Lovelist ya está funcionando en tu tienda.",
+
+    embedTitulo: "Activar Lovelist en tu tema",
+    embedAyuda:
+      "Prende el panel de favoritos, el contador y los corazones en las páginas de colección. Sin esto, la app no se ve en ningún lado.",
+    embedBoton: "Activar en el editor de temas",
+    embedDetectado: "Detectamos actividad en tu tienda",
+    embedDetectadoAyuda: "Última señal: {cuando}.",
+    embedSinDetectar: "Todavía no detectamos actividad",
+    embedSinDetectarAyuda:
+      "Lo detectamos cuando alguien visita tu tienda con Lovelist activo. Si ya lo activaste, abrí tu tienda en otra pestaña y volvé a comprobar: puede tardar un momento.",
+    embedComprobar: "Volver a comprobar",
+
+    botonTitulo: "Agregar el botón a la página de producto",
+    botonAyuda:
+      "Es el botón de guardar en la ficha de cada producto. Los corazones de las páginas de colección funcionan sin esto, pero la ficha es donde más se guarda.",
+    botonBoton: "Agregar en el editor de temas",
+    botonNoVerificable:
+      "Esto no lo podemos comprobar solos: haría falta un permiso para leer tu tema, y preferimos no pedirlo. Marcalo vos cuando lo hayas hecho.",
+    botonHecho: "Ya coloqué el botón en mi página de producto",
+    botonGuardado: "Anotado.",
+  },
+  /** Métricas del dashboard. */
+  metricas: {
+    titulo: "Cómo viene Lovelist",
+    listas: "Listas de favoritos",
+    favoritos: "Productos guardados",
+    favoritosUltimos30: "Guardados en los últimos 30 días",
+    agregadosAlCarrito: "Agregados al carrito desde Lovelist",
+    agregadosAlCarritoAyuda:
+      "Cuenta los clics en los botones de carrito de Lovelist. No es una medida de ventas: no sabemos si la compra se completó.",
+    ultimos30: "{n} en los últimos 30 días",
+    masDeseados: "Los más deseados",
+    masDeseadosAyuda: "Los 10 productos que más gente guardó.",
+    guardadoPor: "{n} personas",
+    guardadoPorUno: "1 persona",
+    sinDatos: "Todavía no hay favoritos guardados.",
+    sinDatosAyuda:
+      "En cuanto alguien guarde su primer producto, vas a ver los números acá.",
+    productoNoDisponible: "Producto no disponible",
+  },
   wishlist: {
     listaPredeterminada: "Favoritos",
   },
