@@ -61,24 +61,24 @@ async function textosDelEmbed() {
   const liquid = await readFile(ruta(EMBED), "utf8");
   const catalogo = JSON.parse(await readFile(ruta(LOCALES), "utf8")).lovelist;
 
-  // Cada línea del embed tiene una de estas dos formas:
-  //
-  //   "clave": {{ block.settings.texto_clave | default: d_clave | json }}
-  //   "clave": {{ d_clave | json }}
-  //
-  // Las dos terminan en `d_<clave del catálogo> | json`, que es lo que se
-  // busca. La primera es un texto que el merchant puede editar desde el app
-  // embed; la segunda, uno que no.
-  const claves = [...liquid.matchAll(/"(\w+)":\s*\{\{[^}]*?d_(\w+)\s*\|\s*json\s*\}\}/g)];
-  if (!claves.length) {
-    throw new Error(`no se encontró ningún texto en ${EMBED}. ¿Cambió el formato?`);
+  // Se leen las claves del bloque `"textos": { ... }` del embed, que son las
+  // mismas del catálogo. No se mira el nombre de la variable Liquid a
+  // propósito: esa es una convención interna del archivo —tuvo que pasar a
+  // snake_case por el theme check— y atarse a ella hacía que renombrarla
+  // rompiera el banco sin que nada estuviera mal.
+  const bloque = liquid.match(/"textos":\s*\{([\s\S]*?)\n\s{4}\}/);
+  if (!bloque) {
+    throw new Error(`no se encontró el bloque "textos" en ${EMBED}. ¿Cambió el formato?`);
   }
-
+  const claves = [...bloque[1].matchAll(/"(\w+)":/g)].map((m) => m[1]);
+  if (!claves.length) {
+    throw new Error(`el bloque "textos" de ${EMBED} vino vacío`);
+  }
   const textos = {};
   const faltan = [];
-  for (const [, clave, deCatalogo] of claves) {
-    if (!(deCatalogo in catalogo)) faltan.push(deCatalogo);
-    else textos[clave] = catalogo[deCatalogo];
+  for (const clave of claves) {
+    if (!(clave in catalogo)) faltan.push(clave);
+    else textos[clave] = catalogo[clave];
   }
 
   // Si el embed pide una clave que el catálogo no tiene, la tienda mostraría el

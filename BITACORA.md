@@ -937,6 +937,42 @@ principio:
   refleja nunca.
 - **Nada de `catch` que solo hace `console.error`.**
 
+### Limitación conocida: no todos los textos son editables
+
+**Doce de los treinta y un textos del storefront no se pueden cambiar desde el
+app embed.** No es un olvido: es un techo de Shopify.
+
+Cada bloque de una theme app extension admite como máximo **25 settings
+interactivos** (`text`, `select`, `checkbox`, `color`…) y **6 no interactivos**
+(`header`, `paragraph`). Los treinta y un textos más los cinco de configuración
+visual daban 36, muy por encima.
+
+Los que quedaron fijos son los que el comprador ve rara vez: cerrar, cargando,
+lista llena, demasiado rápido, link copiado, WhatsApp, Email, y los cinco
+mensajes de error. Los diecinueve editables son los que se leen siempre.
+
+**Consecuencia asumida:** un merchant que no hable español va a ver **los
+mensajes de error en español**. Se eligió así porque los errores aparecen rara
+vez y el resto de la interfaz aparece siempre. Cuando el multiidioma entre en
+alcance —hoy está fuera del MVP— esto se resuelve de raíz.
+
+**Dos trampas de este límite, para el que venga después:**
+
+1. **La documentación de Shopify no publica ninguno de los dos números.** La
+   página de configuración lista otros límites —30 bloques, 100 KB de Liquid,
+   10 MB de archivos— y de settings no dice nada. Los números salieron del
+   mensaje de error y del foro de desarrolladores.
+2. **`shopify app build` no los comprueba: pasa sin chistar.** El único lugar
+   donde se validan es `shopify app deploy`, del lado del servidor. Por eso,
+   desde el 2026-08-09, toda entrega que toque el storefront se despliega antes
+   de darse por terminada. `shopify app deploy --no-release` crea la versión y
+   la valida sin publicarla, que es la forma barata de comprobarlo.
+
+Hoy el bloque está en 24 interactivos y 5 no interactivos: **queda un lugar de
+cada uno**. Agregar dos settings de un tipo rompe el deploy.
+
+---
+
 ### Pendientes de lanzamiento (requisitos de la App Store)
 
 Salieron de leer la documentación vigente el 2026-08-09. **Ninguno es de la
@@ -987,9 +1023,14 @@ Mailchimp, POS.
 
 1. `npm run typecheck` y `npm run build`, los dos limpios
 2. Commit y push a `main`
-3. **Parar.** Reportar qué quedó hecho y **cómo lo prueba Jonas**, con pasos
+3. **Si la entrega toca el storefront, `shopify app deploy` antes de darla por
+   terminada.** Hay validaciones que solo corren del lado del servidor —los
+   límites de settings del app embed, por ejemplo— y `shopify app build` no las
+   ve. Entregar sin desplegar es entregar sin saber si compila de verdad.
+   `--no-release` valida sin publicar
+4. **Parar.** Reportar qué quedó hecho y **cómo lo prueba Jonas**, con pasos
    concretos y qué debería ver en pantalla
-4. Esperar su visto bueno antes de la fase siguiente
+5. Esperar su visto bueno antes de la fase siguiente
 
 No adelantar fases. No dejar código de una fase futura "ya que estamos". Si algo
 de una fase revela que una decisión del plan está mal, **decirlo y parar**, no

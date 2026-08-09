@@ -20,42 +20,59 @@
   El bloque del botón de producto hereda todo esto sin configurarse aparte: su
   ícono lo pinta este mismo JS y sus textos salen de esta misma config.
 
+  ---------------------------------------------------------------------------
+  CUIDADO AL AGREGAR SETTINGS. Shopify limita cada bloque a **25 settings
+  interactivos** (`text`, `select`, `checkbox`, `color`…) y **6 no
+  interactivos** (`header`, `paragraph`). Ninguno de los dos límites está en la
+  documentación y `shopify app build` no los comprueba: el único que avisa es
+  `shopify app deploy`, y lo hace fallando.
+
+  Hoy hay 24 interactivos y 5 no interactivos. Queda **un lugar de cada uno**.
+  Por eso no están editables los doce textos que el comprador ve rara vez;
+  está explicado en la bitácora, en "Limitaciones conocidas".
+  ---------------------------------------------------------------------------
+
   Acá no hay ninguna referencia al dominio de la app. Todo el tráfico sale
   hacia /apps/lovelist, que es el App Proxy.
 {% endcomment %}
 
 {%- liquid
+  assign apariencia = block.settings.apariencia | default: 'corazon_relleno'
+  assign partes = apariencia | split: '_'
+  assign forma_icono = partes[0]
+  assign modo_icono = partes[1]
+
   assign d_guardar = 'lovelist.guardar' | t
   assign d_guardado = 'lovelist.guardado' | t
   assign d_quitar = 'lovelist.quitar' | t
-  assign d_misFavoritos = 'lovelist.misFavoritos' | t
-  assign d_abrirFavoritos = 'lovelist.abrirFavoritos' | t
+  assign d_mis_favoritos = 'lovelist.misFavoritos' | t
+  assign d_abrir_favoritos = 'lovelist.abrirFavoritos' | t
   assign d_cerrar = 'lovelist.cerrar' | t
   assign d_vacio = 'lovelist.vacio' | t
-  assign d_vacioAyuda = 'lovelist.vacioAyuda' | t
+  assign d_vacio_ayuda = 'lovelist.vacioAyuda' | t
   assign d_cargando = 'lovelist.cargando' | t
-  assign d_errorGuardar = 'lovelist.errorGuardar' | t
-  assign d_errorQuitar = 'lovelist.errorQuitar' | t
-  assign d_errorCargar = 'lovelist.errorCargar' | t
-  assign d_listaLlena = 'lovelist.listaLlena' | t
-  assign d_demasiadoRapido = 'lovelist.demasiadoRapido' | t
-  assign d_verTodos = 'lovelist.verTodos' | t
+  assign d_error_guardar = 'lovelist.errorGuardar' | t
+  assign d_error_quitar = 'lovelist.errorQuitar' | t
+  assign d_error_cargar = 'lovelist.errorCargar' | t
+  assign d_lista_llena = 'lovelist.listaLlena' | t
+  assign d_demasiado_rapido = 'lovelist.demasiadoRapido' | t
+  assign d_ver_todos = 'lovelist.verTodos' | t
   assign d_agotado = 'lovelist.agotado' | t
-  assign d_alCarrito = 'lovelist.alCarrito' | t
-  assign d_agregarTodo = 'lovelist.agregarTodo' | t
-  assign d_quitarDeLista = 'lovelist.quitarDeLista' | t
+  assign d_al_carrito = 'lovelist.alCarrito' | t
+  assign d_agregar_todo = 'lovelist.agregarTodo' | t
+  assign d_quitar_de_lista = 'lovelist.quitarDeLista' | t
   assign d_compartir = 'lovelist.compartir' | t
-  assign d_copiarLink = 'lovelist.copiarLink' | t
+  assign d_copiar_link = 'lovelist.copiarLink' | t
   assign d_copiado = 'lovelist.copiado' | t
-  assign d_porWhatsapp = 'lovelist.porWhatsapp' | t
-  assign d_porEmail = 'lovelist.porEmail' | t
-  assign d_mensajeCompartir = 'lovelist.mensajeCompartir' | t
-  assign d_asuntoEmail = 'lovelist.asuntoEmail' | t
-  assign d_errorCarrito = 'lovelist.errorCarrito' | t
-  assign d_errorCompartir = 'lovelist.errorCompartir' | t
-  assign d_tituloPagina = 'lovelist.tituloPagina' | t
-  assign d_listaCompartida = 'lovelist.listaCompartida' | t
-  assign d_soloLectura = 'lovelist.soloLectura' | t
+  assign d_por_whatsapp = 'lovelist.porWhatsapp' | t
+  assign d_por_email = 'lovelist.porEmail' | t
+  assign d_mensaje_compartir = 'lovelist.mensajeCompartir' | t
+  assign d_asunto_email = 'lovelist.asuntoEmail' | t
+  assign d_error_carrito = 'lovelist.errorCarrito' | t
+  assign d_error_compartir = 'lovelist.errorCompartir' | t
+  assign d_titulo_pagina = 'lovelist.tituloPagina' | t
+  assign d_lista_compartida = 'lovelist.listaCompartida' | t
+  assign d_solo_lectura = 'lovelist.soloLectura' | t
 -%}
 
 <style>
@@ -72,42 +89,42 @@
     "moneda": {{ shop.currency | json }},
     "idioma": {{ request.locale.iso_code | json }},
     "clienteConectado": {% if customer %}true{% else %}false{% endif %},
-    "icono": {{ block.settings.icono | default: 'corazon' | json }},
-    "rellenarAlGuardar": {% if block.settings.estilo == 'linea' %}false{% else %}true{% endif %},
+    "icono": {{ forma_icono | json }},
+    "rellenarAlGuardar": {% if modo_icono == 'linea' %}false{% else %}true{% endif %},
     "mostrarContador": {% if block.settings.mostrar_contador == false %}false{% else %}true{% endif %},
     "claseBoton": {{ block.settings.clase_boton | default: 'button' | json }},
     "textos": {
       "guardar": {{ block.settings.texto_guardar | default: d_guardar | json }},
       "guardado": {{ block.settings.texto_guardado | default: d_guardado | json }},
       "quitar": {{ block.settings.texto_quitar | default: d_quitar | json }},
-      "misFavoritos": {{ block.settings.texto_misFavoritos | default: d_misFavoritos | json }},
-      "abrirFavoritos": {{ block.settings.texto_abrirFavoritos | default: d_abrirFavoritos | json }},
-      "cerrar": {{ block.settings.texto_cerrar | default: d_cerrar | json }},
+      "misFavoritos": {{ block.settings.texto_mis_favoritos | default: d_mis_favoritos | json }},
+      "abrirFavoritos": {{ block.settings.texto_abrir_favoritos | default: d_abrir_favoritos | json }},
+      "cerrar": {{ d_cerrar | json }},
       "vacio": {{ block.settings.texto_vacio | default: d_vacio | json }},
-      "vacioAyuda": {{ block.settings.texto_vacioAyuda | default: d_vacioAyuda | json }},
+      "vacioAyuda": {{ block.settings.texto_vacio_ayuda | default: d_vacio_ayuda | json }},
       "cargando": {{ d_cargando | json }},
-      "errorGuardar": {{ block.settings.texto_errorGuardar | default: d_errorGuardar | json }},
-      "errorQuitar": {{ block.settings.texto_errorQuitar | default: d_errorQuitar | json }},
-      "errorCargar": {{ block.settings.texto_errorCargar | default: d_errorCargar | json }},
-      "listaLlena": {{ d_listaLlena | json }},
-      "demasiadoRapido": {{ d_demasiadoRapido | json }},
-      "verTodos": {{ block.settings.texto_verTodos | default: d_verTodos | json }},
+      "errorGuardar": {{ d_error_guardar | json }},
+      "errorQuitar": {{ d_error_quitar | json }},
+      "errorCargar": {{ d_error_cargar | json }},
+      "listaLlena": {{ d_lista_llena | json }},
+      "demasiadoRapido": {{ d_demasiado_rapido | json }},
+      "verTodos": {{ block.settings.texto_ver_todos | default: d_ver_todos | json }},
       "agotado": {{ block.settings.texto_agotado | default: d_agotado | json }},
-      "alCarrito": {{ block.settings.texto_alCarrito | default: d_alCarrito | json }},
-      "agregarTodo": {{ block.settings.texto_agregarTodo | default: d_agregarTodo | json }},
-      "quitarDeLista": {{ block.settings.texto_quitarDeLista | default: d_quitarDeLista | json }},
+      "alCarrito": {{ block.settings.texto_al_carrito | default: d_al_carrito | json }},
+      "agregarTodo": {{ block.settings.texto_agregar_todo | default: d_agregar_todo | json }},
+      "quitarDeLista": {{ block.settings.texto_quitar_de_lista | default: d_quitar_de_lista | json }},
       "compartir": {{ block.settings.texto_compartir | default: d_compartir | json }},
-      "copiarLink": {{ block.settings.texto_copiarLink | default: d_copiarLink | json }},
+      "copiarLink": {{ block.settings.texto_copiar_link | default: d_copiar_link | json }},
       "copiado": {{ d_copiado | json }},
-      "porWhatsapp": {{ d_porWhatsapp | json }},
-      "porEmail": {{ d_porEmail | json }},
-      "mensajeCompartir": {{ block.settings.texto_mensajeCompartir | default: d_mensajeCompartir | json }},
-      "asuntoEmail": {{ block.settings.texto_asuntoEmail | default: d_asuntoEmail | json }},
-      "errorCarrito": {{ block.settings.texto_errorCarrito | default: d_errorCarrito | json }},
-      "errorCompartir": {{ d_errorCompartir | json }},
-      "tituloPagina": {{ block.settings.texto_tituloPagina | default: d_tituloPagina | json }},
-      "listaCompartida": {{ block.settings.texto_listaCompartida | default: d_listaCompartida | json }},
-      "soloLectura": {{ block.settings.texto_soloLectura | default: d_soloLectura | json }}
+      "porWhatsapp": {{ d_por_whatsapp | json }},
+      "porEmail": {{ d_por_email | json }},
+      "mensajeCompartir": {{ block.settings.texto_mensaje_compartir | default: d_mensaje_compartir | json }},
+      "asuntoEmail": {{ block.settings.texto_asunto_email | default: d_asunto_email | json }},
+      "errorCarrito": {{ d_error_carrito | json }},
+      "errorCompartir": {{ d_error_compartir | json }},
+      "tituloPagina": {{ block.settings.texto_titulo_pagina | default: d_titulo_pagina | json }},
+      "listaCompartida": {{ block.settings.texto_lista_compartida | default: d_lista_compartida | json }},
+      "soloLectura": {{ block.settings.texto_solo_lectura | default: d_solo_lectura | json }}
     }
   }
 </script>
@@ -126,23 +143,15 @@
     { "type": "header", "content": "Apariencia" },
     {
       "type": "select",
-      "id": "icono",
+      "id": "apariencia",
       "label": "Ícono",
-      "default": "corazon",
+      "info": "Sin guardar siempre se ve en línea, para que la diferencia se note sin depender del color.",
+      "default": "corazon_relleno",
       "options": [
-        { "value": "corazon", "label": "Corazón" },
-        { "value": "estrella", "label": "Estrella" }
-      ]
-    },
-    {
-      "type": "select",
-      "id": "estilo",
-      "label": "Al guardar, el ícono",
-      "info": "Sin guardar siempre se ve en línea, para que se note la diferencia.",
-      "default": "relleno",
-      "options": [
-        { "value": "relleno", "label": "Se rellena" },
-        { "value": "linea", "label": "Queda en línea y cambia de color" }
+        { "value": "corazon_relleno", "label": "Corazón, se rellena al guardar" },
+        { "value": "corazon_linea", "label": "Corazón, siempre en línea" },
+        { "value": "estrella_relleno", "label": "Estrella, se rellena al guardar" },
+        { "value": "estrella_linea", "label": "Estrella, siempre en línea" }
       ]
     },
     {
@@ -167,38 +176,31 @@
       "type": "text",
       "id": "clase_boton",
       "label": "Clase CSS de los botones de tu tema",
-      "info": "Sirve para que los botones de Lovelist se vean como los de tu tienda. \"button\" funciona en Dawn y en la mayoría de los temas. Si el tuyo usa otra, ponela acá. Vacío deja el estilo propio de Lovelist.",
+      "info": "Hace que los botones de Lovelist se vean como los de tu tienda. \"button\" funciona en Dawn y en la mayoría de los temas. Vacío deja el estilo propio de Lovelist.",
       "default": "button"
     },
-    { "type": "header", "content": "Textos: botón de favoritos" },
+    { "type": "header", "content": "Textos: botón y panel" },
     { "type": "text", "id": "texto_guardar", "label": "Guardar", "default": "Guardar en favoritos" },
     { "type": "text", "id": "texto_guardado", "label": "Ya guardado", "default": "Guardado en favoritos" },
     { "type": "text", "id": "texto_quitar", "label": "Quitar", "default": "Quitar de favoritos" },
-    { "type": "header", "content": "Textos: panel lateral" },
-    { "type": "text", "id": "texto_misFavoritos", "label": "Título del panel", "default": "Mis favoritos" },
-    { "type": "text", "id": "texto_abrirFavoritos", "label": "Abrir el panel", "default": "Abrir mis favoritos" },
-    { "type": "text", "id": "texto_cerrar", "label": "Cerrar", "default": "Cerrar" },
-    { "type": "text", "id": "texto_verTodos", "label": "Ver todos", "default": "Ver todos mis favoritos" },
+    { "type": "text", "id": "texto_mis_favoritos", "label": "Título del panel", "default": "Mis favoritos" },
+    { "type": "text", "id": "texto_abrir_favoritos", "label": "Abrir el panel", "default": "Abrir mis favoritos" },
+    { "type": "text", "id": "texto_ver_todos", "label": "Ver todos", "default": "Ver todos mis favoritos" },
     { "type": "text", "id": "texto_vacio", "label": "Sin favoritos", "default": "Todavía no guardaste nada." },
-    { "type": "text", "id": "texto_vacioAyuda", "label": "Sin favoritos, ayuda", "default": "Tocá el corazón en cualquier producto para guardarlo acá." },
+    { "type": "text", "id": "texto_vacio_ayuda", "label": "Sin favoritos, ayuda", "default": "Tocá el corazón en cualquier producto para guardarlo acá." },
     { "type": "header", "content": "Textos: página de favoritos" },
-    { "type": "text", "id": "texto_tituloPagina", "label": "Título de la página", "default": "Mis favoritos", "info": "Es el título que ve el comprador en /apps/lovelist." },
-    { "type": "text", "id": "texto_alCarrito", "label": "Agregar al carrito", "default": "Agregar al carrito" },
-    { "type": "text", "id": "texto_agregarTodo", "label": "Agregar todo", "default": "Agregar todo al carrito" },
-    { "type": "text", "id": "texto_quitarDeLista", "label": "Quitar de la lista", "default": "Quitar" },
+    { "type": "text", "id": "texto_titulo_pagina", "label": "Título de la página", "info": "Es el título que ve el comprador en /apps/lovelist.", "default": "Mis favoritos" },
+    { "type": "text", "id": "texto_al_carrito", "label": "Agregar al carrito", "default": "Agregar al carrito" },
+    { "type": "text", "id": "texto_agregar_todo", "label": "Agregar todo", "default": "Agregar todo al carrito" },
+    { "type": "text", "id": "texto_quitar_de_lista", "label": "Quitar de la lista", "default": "Quitar" },
     { "type": "text", "id": "texto_agotado", "label": "Sin stock", "default": "Sin stock" },
     { "type": "header", "content": "Textos: compartir" },
     { "type": "text", "id": "texto_compartir", "label": "Compartir", "default": "Compartir esta lista" },
-    { "type": "text", "id": "texto_copiarLink", "label": "Copiar link", "default": "Copiar link" },
-    { "type": "text", "id": "texto_mensajeCompartir", "label": "Mensaje al compartir", "default": "Mirá mi lista de favoritos:" },
-    { "type": "text", "id": "texto_asuntoEmail", "label": "Asunto del email", "default": "Mi lista de favoritos" },
-    { "type": "text", "id": "texto_listaCompartida", "label": "Encabezado de lista compartida", "default": "Lista compartida" },
-    { "type": "text", "id": "texto_soloLectura", "label": "Aclaración de lista compartida", "default": "Estás viendo una lista que alguien compartió con vos." },
-    { "type": "header", "content": "Textos: errores" },
-    { "type": "text", "id": "texto_errorGuardar", "label": "No se pudo guardar", "default": "No pudimos guardar el producto. Intentá de nuevo." },
-    { "type": "text", "id": "texto_errorQuitar", "label": "No se pudo quitar", "default": "No pudimos quitar el producto. Intentá de nuevo." },
-    { "type": "text", "id": "texto_errorCargar", "label": "No se pudieron cargar", "default": "No pudimos cargar tus favoritos." },
-    { "type": "text", "id": "texto_errorCarrito", "label": "No se pudo agregar al carrito", "default": "No pudimos agregar al carrito. Intentá de nuevo." }
+    { "type": "text", "id": "texto_copiar_link", "label": "Copiar link", "default": "Copiar link" },
+    { "type": "text", "id": "texto_mensaje_compartir", "label": "Mensaje al compartir", "default": "Mirá mi lista de favoritos:" },
+    { "type": "text", "id": "texto_asunto_email", "label": "Asunto del email", "default": "Mi lista de favoritos" },
+    { "type": "text", "id": "texto_lista_compartida", "label": "Encabezado de lista compartida", "default": "Lista compartida" },
+    { "type": "text", "id": "texto_solo_lectura", "label": "Aclaración de lista compartida", "default": "Estás viendo una lista que alguien compartió con vos." }
   ]
 }
 {% endschema %}
