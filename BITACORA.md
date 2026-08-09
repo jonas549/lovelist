@@ -800,6 +800,57 @@ fuera de Vite para probarlos. Se reescribieron con campos explícitos.
 
 ---
 
+
+### 4.15 La app entera andaba y el botón de pagar estaba apagado
+
+**Cómo se manifestó.** Recorriendo el flujo en la tienda real después de
+cambiar el modelo de cobro: la pantalla de planes se veía perfecta —los dos
+planes, el actual marcado, los precios— y el botón **"Cambiar a Pro" estaba
+deshabilitado**, con una nota discreta debajo. No había forma de suscribirse.
+
+**Causa.** `urlDePlanes()` dependía sólo de `SHOPIFY_APP_HANDLE`, que no está
+definida en Vercel. Sin handle no se puede armar la URL de la página de precios,
+y la pantalla degradaba a botón apagado.
+
+Lo más incómodo es que **era deliberado**: el comentario decía que no había
+valor de reserva a propósito, porque uno inventado llevaría a una página que no
+existe y el merchant no sabría que el problema es nuestro. El razonamiento vale
+para un valor inventado. Pero el handle no lo es: está en `shopify.app.toml`,
+versionado, y es exactamente el que usa Shopify. Ahora Vite lo hornea en el
+build y la variable de entorno sólo lo pisa si existe.
+
+**Lecciones.**
+
+- *Una degradación elegante puede esconder un fallo total.* La nota discreta se
+  eligió para no asustar a un revisor con un cartel rojo, y funcionó tan bien
+  que el problema pasaba por decisión de diseño. Un cartel rojo se habría visto
+  el primer día.
+- *"Sin valor de reserva a propósito" hay que revisarlo cuando lo que se cae es
+  el camino del dinero.* El costo de equivocarse no era simétrico: un enlace
+  roto se reporta, un botón apagado se acepta.
+- *Y hay que recorrer el flujo completo en la tienda de verdad.* Ni el
+  typecheck, ni el lint, ni el banco, ni el deploy de la extensión miran esto.
+  Apareció al mirar la pantalla.
+
+### 4.16 Tres textos que sólo se ven mirando
+
+En el mismo recorrido, y todos invisibles para las herramientas:
+
+- El aviso del dashboard decía **"1 de tus listas alcanzaron"**. Y es el caso
+  más probable de todos: el aviso aparece justo cuando la *primera* lista llega
+  al tope. Ahora hay forma singular y plural.
+- Ese aviso y la pantalla de confirmación prometían **"sin límite" con Pro**,
+  que ya se había corregido en la pantalla de precios y se quedó en los otros
+  dos lugares. *Lección: cuando se corrige una promesa, hay que buscar todas sus
+  copias.*
+- El texto por defecto del aviso de lista llena en el app embed estaba **sin
+  tildes** —"Esta lista alcanzo su limite"—, que es lo que veía el comprador:
+  el default del schema le gana al catálogo cuando el merchant no lo
+  personalizó. El resto de los defaults del bloque sí tienen acentos. *La regla
+  de escribir sin acentos es para los mensajes de commit, no para lo que se le
+  muestra a la gente.*
+
+
 ## 5. Trampas del entorno
 
 Lo que un recién llegado va a pisar.
@@ -1127,6 +1178,16 @@ Salieron de leer la documentación vigente el 2026-08-09. **Ninguno es de la
 Fase 2.5**: son condiciones para publicar, y hay que resolverlas antes de
 mandar la app a revisión.
 
+**El plan Pro todavía no existe en Shopify.** Es el pendiente que bloquea el
+cobro, y se ve al recorrer el flujo: el botón "Cambiar a Pro" lleva a
+`admin.shopify.com/store/{tienda}/charges/lovelist/pricing_plans`, la página es
+de Lovelist —el handle es correcto— pero devuelve **404**, porque los planes se
+crean en la ficha de la App Store y esa ficha no está armada. Del lado del
+código está todo: el handle se hornea en el build, la URL se arma bien, el
+sondeo lee `activeSubscriptions` y `/confirm` verifica contra Shopify. Falta
+crear el plan con handle **`pro`**, US$ 29/mes, sin trial. Hasta entonces el
+botón lleva a un 404.
+
 **Política de privacidad publicada.** El listado la exige y hoy no existe. Hace
 falta una URL pública. Es fácil de escribir —no guardamos datos personales, ni
 nombre ni email de nadie, solo IDs— pero tiene que estar publicada y dicha en
@@ -1151,7 +1212,9 @@ después de publicar.
 
 **Lo que sí cumplimos ya:** theme app extensions en vez de scripts, sin tocar la
 Asset API, webhooks GDPR reales, `app/uninstalled`, cero datos personales, OAuth
-inmediato, y cobro por Managed Pricing (Fase 2.6).
+inmediato, y el cobro implementado del lado del código (Fase 2.6). Y algo que
+pesa más de lo que parece: **la app no se esconde detrás de un muro**. El
+revisor instala y prueba todo sin suscribirse.
 
 ---
 
