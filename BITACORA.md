@@ -1,6 +1,8 @@
 # Bitácora de Lovelist
 
 > Escrita el 2026-08-08 al cerrar la primera sesión de trabajo.
+> Corregida el 2026-08-09: decía que Jonas había probado la Fase 2.4 hasta el
+> paso 6 de 7. Es falso, no probó ninguno. Ver secciones 1 y 7.
 >
 > Este documento existe para que otra instancia, sin ningún contexto previo,
 > pueda retomar exactamente donde quedamos. No es un resumen: es el registro de
@@ -20,17 +22,22 @@ $29/mes, sin plan gratuito ni prueba.
 
 ### Fases terminadas
 
-| Fase | Qué entregó | Commit de cierre |
-|---|---|---|
-| 1 | Cascarón desplegado: app creada, Neon, App Proxy, HMAC verificado | `3bac714`, más `32e0ee7` y `d57a664` |
-| 2.1 | Modelo de datos y los 7 endpoints del proxy | `b58c5be`, más `801b909` |
-| 2.2 | Theme app extension: embed, botón, inyección en colecciones | `6d64965`, más `25dfe61` |
-| 2.3 | Invitados y fusión con la cuenta al iniciar sesión | `374b7a0` |
-| 2.4 | Página completa, compartir, y resolución de productos en el servidor | `b057fc7` |
+| Fase | Qué entregó | Commit de cierre | ¿Probada en tienda? |
+|---|---|---|---|
+| 1 | Cascarón desplegado: app creada, Neon, App Proxy, HMAC verificado | `3bac714`, más `32e0ee7` y `d57a664` | sí |
+| 2.1 | Modelo de datos y los endpoints del proxy | `b58c5be`, más `801b909` | sí |
+| 2.2 | Theme app extension: embed, botón, inyección en colecciones | `6d64965`, más `25dfe61` | sí |
+| 2.3 | Invitados y fusión con la cuenta al iniciar sesión | `374b7a0` | sí |
+| 2.4 | Página completa, compartir, y resolución de productos en el servidor | `b057fc7` | **no, pendiente** |
 
-Las fases 1, 2.2 y 2.4 necesitaron un commit extra de corrección **después** de
-que Jonas probara en la tienda real. Eso no es excepción: es el patrón. Ver la
+Las fases 1 y 2.2 necesitaron un commit extra de corrección **después** de que
+Jonas probara en la tienda real. Eso no es excepción: es el patrón. Ver la
 sección 4.
+
+**La 2.4 está entregada pero sin verificar.** La sesión se cortó justo al
+entregarla, así que no se ejecutó ninguno de sus pasos de verificación. Por el
+patrón de arriba, lo esperable es que necesite un commit de corrección. Ver la
+sección 7.
 
 ### Qué está probado y dónde
 
@@ -51,7 +58,7 @@ Esta distinción importa. No todo lo que pasa las pruebas funciona en la tienda.
 
 **Probado contra la base de Neon real y la Admin API real, pero no en la tienda:**
 
-- Los 7 endpoints del proxy, con firma HMAC generada por la implementación
+- Los endpoints del proxy, con firma HMAC generada por la implementación
   oficial de Shopify (35 comprobaciones)
 - Los constraints de la base: XOR de identidad, `NULLS NOT DISTINCT`, cascadas
   (8 comprobaciones)
@@ -67,9 +74,10 @@ Esta distinción importa. No todo lo que pasa las pruebas funciona en la tienda.
 - Estado optimista y reversión ante fallo de red
 - Página completa: grilla, carrito, compartir, quitar
 
-**Sin probar todavía:** la página `/apps/lovelist` y la vista compartida en la
-tienda real. Jonas tenía siete pasos de verificación de la Fase 2.4 y no llegó
-al último. Ver sección 7.
+**Sin probar en la tienda real: la Fase 2.4 entera.** Ni la página
+`/apps/lovelist`, ni la vista compartida, ni el ocultamiento de productos
+despublicados. Los siete pasos de verificación quedaron sin ejecutar: la sesión
+terminó en el momento de la entrega. Ver sección 7.
 
 ---
 
@@ -622,10 +630,13 @@ UTF-8; no es corrupción del archivo, es el display de la consola.
 
 ### El bundle del storefront está al 68% del límite
 
-6,8 kB comprimidos sobre 10 kB. Ya no es holgado. **Si la Fase 2.5 suma mucho JS
-al storefront, va a haber que partir el bundle**: por ejemplo, dejar en el embed
-solo lo que hace falta en todas las páginas y cargar la lógica de la página
-completa aparte.
+6,8 kB comprimidos sobre 10 kB. Ya no es holgado.
+
+La 2.5 **ya no lo empeora**: la configuración viaja por Liquid, no por JS. Pero
+el margen sigue siendo el que es, así que la regla se mantiene para lo que
+venga: si algo suma peso al storefront, hay que partir el bundle —por ejemplo,
+dejar en el embed solo lo que hace falta en todas las páginas y cargar la lógica
+de la página completa aparte.
 
 ### El selector de listas existe pero no se puede usar
 
@@ -664,8 +675,9 @@ base, pero eso contradice la regla de "nada de datos de producto".
 ### Dos catálogos de textos
 
 `app/i18n.ts` para el servidor y el admin; `extensions/lovelist-theme/locales/`
-para el storefront. El plan pide uno solo y no se puede: la extensión es un
-bundle que nunca toca el servidor.
+para el storefront. **No es deuda: es la única forma posible**, porque la
+extensión es un bundle que nunca toca el servidor. El plan pedía uno solo; se
+corrigió el 2026-08-09 para que diga lo que de verdad se puede hacer.
 
 ### `noindex` en la vista compartida usa dos mecanismos
 
@@ -684,32 +696,51 @@ un número mayor que la cantidad de tarjetas. Es menor y quedó sin resolver.
 
 ## 7. Qué falta
 
-### Verificación pendiente de la Fase 2.4
+### Verificación pendiente de la Fase 2.4 — los siete pasos, ninguno hecho
 
-Jonas probó hasta el paso 6 de 7. **Falta el paso 7**, y es el que valida una
-promesa explícita del plan:
+**Nada de la 2.4 se probó en la tienda real.** La entrega y el final de la
+sesión coincidieron, así que los siete pasos quedaron sin ejecutar. Lo que hay
+es verificación en el banco de pruebas y contra la Admin API real, que es
+exactamente el nivel de confianza que ya nos falló tres veces (ver sección 8).
+
+Hasta que Jonas los corra, la 2.4 **no está cerrada** y no se arranca la 2.5.
+
+El paso más importante es el séptimo, porque valida una promesa explícita del
+plan y toca el terreno donde ya apareció un bug (`onlineStoreUrl`, ver 4.6):
 
 > Despublicá un producto guardado desde el admin y recargá la página de
 > favoritos: debe **desaparecer** de la lista, no romper la página.
 
-También quedan sin probar en la tienda real la página `/apps/lovelist` completa
-y la vista compartida (pasos 2 a 6). Están verificados en el banco y contra la
-Admin API, pero no en el navegador de una tienda.
+Aprovechar la misma pasada para comprobar si el App Proxy reenvía la cabecera
+`X-Robots-Tag` en `/apps/lovelist/shared/:token`. Es la duda que quedó abierta
+en la sección 6 y solo se resuelve mirando la respuesta real.
 
-### Fase 2.5 — Admin
+### Fase 2.5 — Configuración en el tema y admin
 
-1. **Dashboard** en `/app`: total de listas, total de items guardados, y los 10
+**El alcance cambió el 2026-08-09.** La versión anterior guardaba la
+configuración visual en `Shop.settings` y obligaba al storefront a leerla desde
+el servidor. Jonas lo resolvió al revés, y es mejor por tres razones: sin red no
+hay parpadeo del ícono, sin JS nuevo no se toca el presupuesto del bundle, y el
+merchant configura donde ya está parado —el editor de temas— cuando coloca el
+bloque. El detalle definitivo está en `PLAN-MVP.md`.
+
+1. **Lo visual son settings del app embed block**, renderizados en Liquid: ícono
+   corazón o estrella, estilo relleno o línea, colores activo e inactivo, texto
+   del botón o solo ícono, mostrar u ocultar el contador. Hoy esos valores están
+   fijos en `theme-src/`; hay que exponerlos como `settings` del bloque.
+2. **`Shop.settings` no guarda configuración visual.** La columna existe y queda
+   libre para lo que el storefront no necesite leer.
+3. **Dashboard** en `/app`: total de listas, total de items guardados, y los 10
    productos más deseados con su conteo.
-2. **Configuración** en `/app/settings`, guardada en `Shop.settings` (la columna
-   ya existe): ícono corazón o estrella, estilo relleno o línea, color activo e
-   inactivo, texto del botón o solo ícono, mostrar u ocultar el contador.
-3. **Soporte** en `/app/support`: datos de contacto reales y enlace a la
+4. **`/app/settings` es de solo lectura**: refleja la configuración vigente, con
+   enlace directo al editor de temas para cambiarla, más las instrucciones de
+   instalación (activar el embed, colocar el bloque en la página de producto).
+   Ahí es donde los merchants se pierden.
+5. **Soporte** en `/app/support`: datos de contacto reales y enlace a la
    documentación.
-4. Los cambios deben verse en el storefront **sin tocar el tema**. O sea que el
-   JS del storefront tiene que leer esa configuración desde el servidor. Hoy los
-   valores están fijos en el código; hay que dejar la costura.
 
-Ojo con el bundle: esto suma JS al storefront.
+**Cero JS nuevo en el storefront por la configuración.** Es consecuencia directa
+de la decisión, y es lo que saca de encima la presión sobre el bundle.
 
 ### Fase 2.6 — Cobro
 

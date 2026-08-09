@@ -2,6 +2,9 @@
 
 > Documento de trabajo. Vive en la raíz del repo y es la fuente de verdad del MVP.
 > Escrito el 2026-08-08, después de completar la Fase 1 (cascarón desplegado).
+> Actualizado el 2026-08-09: cambia el alcance de la Fase 2.5 (la configuración
+> visual pasa a los settings del app embed block) y se corrigen dos reglas que
+> decían algo imposible — la de i18n y la cuenta de endpoints del proxy.
 
 ---
 
@@ -26,7 +29,7 @@ entregas chicas y verificables que una grande que no sé por dónde probar.
 
 ---
 
-## Estado actual (Fases 1 a 2.4 — terminadas)
+## Estado actual (Fases 1 a 2.3 terminadas; 2.4 entregada sin verificar)
 
 > Para el detalle de cómo se llegó hasta acá —decisiones, errores cometidos y
 > trampas del entorno— ver [`BITACORA.md`](BITACORA.md). Este documento dice
@@ -44,8 +47,10 @@ entregas chicas y verificables que una grande que no sé por dónde probar.
 **Fase 2.1 — datos y API del proxy**
 
 - Modelos `Wishlist`, `WishlistItem`, `RateLimit`; `Shop.settings` y `Shop.uninstalledAt`
-- Los siete endpoints bajo `/proxy`, con firma verificada y propiedad comprobada
-  en cada operación
+- Los siete endpoints de la tabla de la Fase 2.1, con firma verificada y propiedad
+  comprobada en cada operación. Con lo que agregaron las fases 2.2 a 2.4, la
+  superficie del proxy quedó en **once rutas**; la tabla completa está en la
+  sección 3 de `BITACORA.md`
 - Topes activos: 20 listas por identidad, 200 items por lista, 60 escrituras por
   minuto con limpieza oportunista de ventanas vencidas
 - Webhooks de privacidad borrando de verdad: `customers/redact`, `shop/redact`,
@@ -83,8 +88,10 @@ entregas chicas y verificables que una grande que no sé por dónde probar.
 - `GET /apps/lovelist/shared/:token` va entera del servidor, con `noindex`
 - `POST /proxy/products` para el drawer y la página
 - Los productos borrados o despublicados se ocultan; los agotados salen marcados
-- **Sin verificar todavía en la tienda real:** la página propia y la vista
-  compartida. Ver la sección 7 de `BITACORA.md`
+- **Entregada pero sin verificar en la tienda real: ni un solo paso.** La sesión
+  terminó en el momento de la entrega. Hasta que los siete pasos de verificación
+  se corran en `calendario-envios-test-final`, esta fase **no está cerrada** y no
+  se arranca la 2.5. Ver la sección 7 de `BITACORA.md`
 
 **Confirmado en la tienda de desarrollo:** el App Proxy reenvía `PATCH` y `DELETE`
 nativos. Se usan métodos HTTP normales; el respaldo `POST` + `_method` sigue
@@ -124,7 +131,7 @@ Vienen de otra app mía ya en producción. No cambiarlas sin avisarme primero.
 | UI admin | Polaris App Home web components (`s-page`, `s-section`) + App Bridge |
 | HTML custom | Permitido dentro de `s-section` cuando los `s-*` no dan el control de layout necesario |
 | Íconos admin | `lucide-react` |
-| i18n | Objeto TypeScript plano en `app/i18n.ts`. Sin librería externa. Todo en español LATAM |
+| i18n | **Dos catálogos, y no se pueden unificar.** El admin y el servidor usan un objeto TypeScript plano en `app/i18n.ts`; el storefront usa `extensions/lovelist-theme/locales/es.default.json`, porque la extensión es un bundle que nunca toca el servidor. Sin librería externa. Todo en español LATAM |
 | Distribución | `AppDistribution.AppStore` |
 
 ### Reglas propias del storefront
@@ -181,7 +188,8 @@ en Prisma, pero respetar las relaciones y las restricciones marcadas.
 ```
 Shop
   (ya existe)
-  + settings        Json?     // configuración del widget, ver Fase 2.5
+  + settings        Json?     // NO guarda configuración visual: eso vive en los
+                              // settings del app embed block. Ver Fase 2.5
 
 Wishlist
   id                String    @id
@@ -340,22 +348,49 @@ sumado a lo que ya tenía la cuenta.
 
 ---
 
-### Fase 2.5 — Admin
+### Fase 2.5 — Configuración en el tema y admin
+
+> **Alcance corregido el 2026-08-09.** La versión anterior guardaba la configuración
+> visual en `Shop.settings` y pedía que "los cambios se vean en el storefront sin tocar
+> el tema". Eso obligaba al JS del storefront a leer la configuración desde el servidor:
+> una petición de red en cada página, parpadeo del ícono mientras llega —el mismo defecto
+> que ya sufrimos al resolver handles— y más peso en un bundle que está al 68% de su
+> límite. Se invierte: **lo visual son settings del app embed block**.
+
+**La regla que ordena esta fase:** lo que el storefront necesita para pintarse va en el
+app embed y se renderiza en Liquid; `Shop.settings` **no guarda configuración visual**.
+La columna existe y queda libre para lo que el storefront no necesite leer.
 
 **Qué hacer:**
 
-1. **Dashboard** (`/app`): total de listas, total de items guardados, y los 10 productos
-   más deseados con su conteo.
-2. **Configuración** (`/app/settings`), guardada en `Shop.settings`:
+1. **Settings del app embed block**, expuestos en el schema del bloque y renderizados en
+   Liquid. Hoy estos valores están fijos en `theme-src/`; hay que sacarlos ahí:
    - Ícono: corazón o estrella
    - Estilo: relleno o línea
    - Color del ícono activo e inactivo
    - Texto del botón (o solo ícono)
    - Mostrar u ocultar el contador del header
-3. **Soporte** (`/app/support`): datos de contacto reales y enlace a la documentación.
-4. Los cambios de configuración deben verse en el storefront sin tocar el tema.
+2. **Dashboard** (`/app`): total de listas, total de items guardados, y los 10 productos
+   más deseados con su conteo.
+3. **`/app/settings`, en modo lectura.** Muestra la configuración vigente, con un enlace
+   directo al editor de temas para cambiarla. No edita nada.
+4. **Instrucciones de instalación** en esa misma pantalla: cómo activar el app embed y
+   cómo colocar el bloque en la página de producto. Es donde los merchants se pierden.
+5. **Soporte** (`/app/support`): datos de contacto reales y enlace a la documentación.
 
-**Cómo lo pruebo:** cambio el ícono a estrella, recargo la tienda, y veo estrellas.
+**Detalles que importan:**
+
+- **Cero JS nuevo en el storefront por la configuración.** Si en la implementación aparece
+  la necesidad de pedir algo por red para pintarse, es señal de que algo se salió de este
+  diseño: decírmelo y parar.
+- Los valores por defecto del schema deben ser los que hoy están fijos en el código, así
+  que un merchant que no toca nada ve exactamente lo mismo que ahora.
+- Si un valor de configuración falta o es inválido, se usa el de por defecto. Aplica la
+  regla del storefront: fallar en silencio, nunca romper el tema.
+
+**Cómo lo pruebo:** en el editor de temas cambio el ícono a estrella, guardo, recargo la
+tienda con Ctrl+F5, y veo estrellas. Después abro `/app/settings` y confirmo que refleja
+"estrella" y que el enlace me lleva al editor.
 
 ---
 
@@ -425,8 +460,12 @@ A tener presente durante todas las fases, no como paso final:
   Es criterio de revisión de Shopify.
 - **Manejo de errores visible.** Si algo falla, el usuario ve un mensaje en español, no una
   pantalla en blanco.
-- **Todos los textos de cara al merchant y al comprador en `app/i18n.ts`.** Nada de strings
-  sueltos en los componentes.
+- **Ningún texto suelto en los componentes**, ni de cara al merchant ni al comprador. Van
+  en su catálogo: `app/i18n.ts` para el admin y el servidor,
+  `extensions/lovelist-theme/locales/es.default.json` para el storefront. Son dos y así
+  se quedan — ver la regla de i18n más arriba. Un solo idioma: español LATAM. **No agregar
+  otro archivo de locales**, ni siquiera "por si acaso": ya causó un bug (el drawer salió
+  en inglés porque existía un `en.json` que nadie pidió; ver 4.5 de `BITACORA.md`).
 
 ---
 
