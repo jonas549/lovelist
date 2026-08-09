@@ -141,10 +141,9 @@
   var NAVEGA = SIN_DRAWER || SECCIONES_NULAS;
   // Configuracion del merchant cambiada desde el app embed.
   var CONFIG_ALT = /[?&]config-alt/.test(location.search);
-  // La tienda no tiene suscripcion activa: el servidor rechaza las escrituras
-  // y avisa con `activo: false`. El storefront tiene que retirarse entero, no
-  // dejar botones que van a fallar.
-  var SIN_PLAN = /[?&]sin-plan/.test(location.search);
+  // La lista alcanzo el limite de productos del plan. NO es un paywall: la app
+  // funciona entera, lo unico que no se puede es agregar mas.
+  var LISTA_LLENA = /[?&]lista-llena/.test(location.search);
   var ANON_SEMBRADO = "11111111-2222-4333-8444-555555555555";
   if (LOGUEADO || MERGE_FALLA) {
     // Como si hubiera guardado cosas de invitado y recien ahora iniciara sesion.
@@ -247,10 +246,7 @@
                  list: { id: "l1", name: "Favoritos", shareToken: "tok" + "x".repeat(30) } });
     }
     if (u.indexOf("/apps/lovelist/lists") === 0) {
-      // Las listas se devuelven IGUAL aunque la tienda no tenga plan: no se
-      // borra nada, y vuelven enteras si se resuscribe. Lo unico que cambia
-      // es `activo`.
-      return j({ ok: true, activo: !SIN_PLAN, lists: GUARDADOS.length
+      return j({ ok: true, lists: GUARDADOS.length
         ? [{ id: "l1", name: "Favoritos", isDefault: true, shareToken: null, shareUrl: null,
              itemCount: GUARDADOS.length, items: GUARDADOS.slice() }] : [] });
     }
@@ -325,6 +321,14 @@
     }
     if (u.indexOf("/apps/lovelist/items") === 0) {
       if (window.FALLAR_ESCRITURAS) return j({ ok: false, code: "errorInterno", message: "Algo salió mal." }, 500);
+      if (m === "POST" && LISTA_LLENA) {
+        // Lo que responde el servidor cuando la lista llego al limite del plan
+        // (mismo shape que ErrorApi.aResponse). El `message` va distinto del
+        // editable del embed A PROPOSITO: el aviso que ve el comprador tiene
+        // que salir del texto que configuro el merchant, no del servidor.
+        return j({ ok: false, code: "listaLlena",
+                   message: "mensaje del servidor, no el del merchant" }, 409);
+      }
       if (m === "POST") {
         var c = JSON.parse(init.body);
         var it = { id: "it" + (++SEQ), productId: c.productId, variantId: c.variantId || null, addedAt: "" };
@@ -824,34 +828,56 @@ window.__resultado = null;
       return;
     }
 
-    if (SIN_PLAN) {
-      // La tienda no paga. El servidor rechaza cualquier escritura, asi que
-      // dejar botones en pantalla seria ofrecer algo que va a fallar. La regla
-      // de este archivo es fallar en silencio y no romperle la tienda a nadie.
-      out.push("=== TIENDA SIN SUSCRIPCION ACTIVA ===");
+    if (LISTA_LLENA) {
+      // La lista llego al limite del plan. Lo que importa: la app NO se apaga.
+      // Los corazones siguen, lo guardado se sigue viendo y se puede quitar; lo
+      // unico que falla es agregar uno mas, con un mensaje que se entiende.
+      out.push("=== LISTA EN EL LIMITE DEL PLAN ===");
 
-      ok("no queda ni un corazon en la pagina", function () {
+      ok("los corazones siguen en la pagina", function () {
         var n = document.querySelectorAll("[data-lovelist-boton]").length;
-        return { cond: n === 0, extra: n + " corazones" }; });
+        return { cond: n > 0, extra: n + " corazones" }; });
 
-      ok("no queda el contador ni ninguna pieza nuestra", function () {
-        var n = document.querySelectorAll("[data-lovelist-ui]").length;
-        return { cond: n === 0, extra: n + " piezas" }; });
+      ok("el contador sigue montado", function () {
+        return !!document.querySelector(".lovelist-contador"); });
 
-      // Lo que mas importa: NO se borro nada. El servidor devolvio las listas
-      // igual y el comprador las recupera enteras si la tienda se resuscribe.
-      ok("las listas se consultaron igual: no se borro nada", function () {
-        var consultas = PEDIDOS.filter(function (p) {
-          return p.url.indexOf("/apps/lovelist/lists") === 0;
-        });
-        return { cond: consultas.length >= 1, extra: consultas.length + " consultas" }; });
+      var btn = document.querySelector('#simple [data-lovelist-boton]');
+      btn.click();
+      await esperar(800);
 
-      ok("no se intento ninguna escritura", function () {
-        var escrituras = PEDIDOS.filter(function (p) {
-          return p.url.indexOf("/apps/lovelist") === 0 && p.method !== "GET";
-        });
-        return { cond: escrituras.length === 0,
-                 extra: escrituras.map(function (p) { return p.method + " " + p.url; }).join(" | ") }; });
+      ok("al intentar guardar, el corazon vuelve a vacio", function () {
+        return { cond: btn.getAttribute("aria-pressed") === "false",
+                 extra: btn.getAttribute("aria-pressed") }; });
+
+      // Contra el editable del embed, no contra un literal: si el merchant
+      // cambia el texto el banco lo tiene que seguir, y asi ademas se prueba
+      // que el editable llega hasta el aviso.
+      ok("y se avisa con el texto del embed, no con el error generico", function () {
+        var cfg = JSON.parse(document.getElementById("lovelist-config").textContent);
+        var esperado = cfg.textos.listaLlena;
+        var aviso = document.getElementById("lovelist-aviso");
+        var texto = aviso ? aviso.textContent.trim() : "";
+        return { cond: !!esperado && texto === esperado,
+                 extra: "esperado " + JSON.stringify(esperado) + " / vino " + JSON.stringify(texto) }; });
+
+      var previo = document.querySelector('#dawn li:nth-child(1) [data-lovelist-boton]');
+
+      ok("lo que ya estaba guardado sigue ahi", function () {
+        return { cond: previo && previo.getAttribute("aria-pressed") === "true",
+                 extra: previo && previo.getAttribute("aria-pressed") }; });
+
+      // Lo que separa un limite de un muro: el comprador sigue siendo dueño de
+      // su lista. Si quitar tambien fallara, estaria atrapado.
+      previo.click();
+      await esperar(800);
+
+      ok("y se puede quitar aunque la lista este llena", function () {
+        return { cond: previo.getAttribute("aria-pressed") === "false",
+                 extra: previo.getAttribute("aria-pressed") }; });
+
+      ok("el DELETE llego al servidor", function () {
+        var borrados = PEDIDOS.filter(function (p) { return p.method === "DELETE"; });
+        return { cond: borrados.length === 1, extra: JSON.stringify(PEDIDOS.map(function (p) { return p.method + " " + p.url; })) }; });
 
       ok("cero errores de JS", function () {
         return { cond: window.__errores.length === 0, extra: JSON.stringify(window.__errores) }; });

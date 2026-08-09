@@ -5,44 +5,27 @@ import { AppProvider } from "@shopify/shopify-app-react-router/react";
 
 import { authenticate } from "../shopify.server";
 import { buscarShop, confirmarInstalada } from "../proxy.server";
-import { sincronizarPlanSiHaceFalta, tienePlanActivo } from "../plan.server";
+import { sincronizarPlanSiHaceFalta } from "../plan.server";
 import { t, ti } from "../i18n";
 
-/**
- * Pantallas que se ven SIN suscripción activa.
- *
- * Soporte entra a propósito: un merchant con un problema de cobro tiene que
- * poder escribirnos, y encerrarlo detrás del mismo paywall que no puede pagar
- * sería la peor experiencia posible.
- */
-const SIN_PLAN = ["/app/plans", "/app/support"];
-
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  // `redirect` sale de acá y NO de react-router. Dentro del admin embebido son
-  // dos cosas distintas: el de la librería conserva `shop`, `host` y
-  // `embedded` en el destino, y para peticiones embebidas o de datos redirige
-  // por App Bridge en vez de devolver un 302 que el iframe no sabe seguir.
-  //
-  // Usar el de react-router rompía la instalación: el redirect al paywall
-  // llegaba a /app/plans sin esos parámetros, la librería no podía autenticar,
-  // lanzaba su respuesta de rebote —que no lleva status, así que es 200— y el
-  // ErrorBoundary la pintaba como lo que era: el número 200, solo, en pantalla.
-  const { session, redirect } = await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
 
   // La app está instalada: si quedaba una marca de desinstalación vieja, era
   // mentira. Se limpia acá porque es el único lugar donde lo sabemos con
-  // certeza; antes solo se limpiaba en las escrituras del storefront, que el
-  // propio paywall bloquea.
+  // certeza.
   await confirmarInstalada(session.shop);
 
-  const ruta = new URL(request.url).pathname;
-  const libre = SIN_PLAN.some((p) => ruta === p || ruta.startsWith(`${p}/`));
-
-  if (!libre) {
-    const shop = await buscarShop(session.shop);
-    const alDia = shop ? await sincronizarPlanSiHaceFalta(shop) : null;
-    if (!tienePlanActivo(alDia)) throw redirect("/app/plans");
-  }
+  // **Acá NO hay paywall.** Hubo uno —sin suscripción, el admin entero
+  // redirigía a la pantalla de planes— y se sacó: una app pública no puede
+  // secuestrarse a sí misma detrás de un muro. El revisor de Shopify instala y
+  // prueba todo sin suscribirse, y el merchant prueba antes de pagar.
+  //
+  // El plan se sigue sondeando —con su ventana de cinco minutos— porque el
+  // dashboard lo necesita para avisar cuando el límite del gratuito estorba,
+  // pero no decide si se entra o no.
+  const shop = await buscarShop(session.shop);
+  if (shop) await sincronizarPlanSiHaceFalta(shop);
 
   // eslint-disable-next-line no-undef
   return { apiKey: process.env.SHOPIFY_API_KEY || "" };

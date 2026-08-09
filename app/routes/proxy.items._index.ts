@@ -9,6 +9,7 @@ import {
   obtenerOCrearShop,
 } from "../proxy.server";
 import { agregarItem, serializarLista } from "../wishlist.server";
+import { limiteItemsPorLista } from "../plan.server";
 
 export const loader = ({ request }: LoaderFunctionArgs) =>
   manejar(async () => {
@@ -37,6 +38,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
       shop.id,
       identidad,
       cuerpo,
+      limiteItemsPorLista(shop),
     );
 
     return json(

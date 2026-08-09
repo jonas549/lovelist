@@ -12,7 +12,7 @@
     "errorGuardar": "No pudimos guardar el producto. Intentá de nuevo.",
     "errorQuitar": "No pudimos quitar el producto. Intentá de nuevo.",
     "errorCargar": "No pudimos cargar tus favoritos.",
-    "listaLlena": "Esta lista llegó al máximo de productos.",
+    "listaLlena": "Esta lista alcanzó su límite de productos.",
     "demasiadoRapido": "Estás haciendo demasiados cambios muy rápido. Esperá un momento.",
     "verTodos": "Ver todos mis favoritos",
     "agotado": "Sin stock",

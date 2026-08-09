@@ -982,27 +982,32 @@ bloque. El detalle definitivo está en `PLAN-MVP.md`.
 **Cero JS nuevo en el storefront por la configuración.** Es consecuencia directa
 de la decisión, y es lo que saca de encima la presión sobre el bundle.
 
-### Fase 2.6 — Cobro
+### Fase 2.6 — Cobro  ✅ hecha
 
-**Shopify Managed Pricing.** La app no crea suscripciones ni toca dinero: solo
-*lee* qué plan tiene cada tienda.
+**Shopify App Pricing (antes Managed Pricing).** La app no crea suscripciones ni
+toca dinero: sólo *lee* qué plan tiene cada tienda.
 
-1. Un plan: handle `pro`, $29/mes, sin trial.
-2. `/app/plans` con botón a
-   `https://admin.shopify.com/store/{shop}/charges/{appHandle}/pricing_plans`.
-   El `appHandle` debe venir de variable de entorno **y estar definida**.
+**El modelo es un límite, no un muro.** Gratis: 10 productos por lista. Pro
+(US$ 29/mes): 200. La app funciona **entera** en los dos planes —corazones,
+panel, página, compartir, métricas—; lo único que cambia es cuántos favoritos
+entran en una lista.
+
+Cómo quedó:
+
+1. Un plan de pago: handle `pro`, $29/mes, sin trial.
+2. `/app/plans` es **informativa**: muestra los dos planes, marca el actual y
+   lleva a la página de precios de Shopify. Nadie llega ahí redirigido.
 3. Sondeo contra `currentAppInstallation.activeSubscriptions` (**plural**),
    leyendo **`planHandle`, no `name`** (el nombre viene traducido y el mapeo
    falla en tiendas no inglesas).
-4. Ruta de retorno `/app/plans/confirm`.
-5. **Paywall duro:** sin suscripción activa el storefront no guarda favoritos y
-   el admin muestra la pantalla de planes.
+4. Ruta de retorno `/app/plans/confirm`, que verifica contra Shopify.
+5. El límite vive en `limiteItemsPorLista()` y lo aplica `agregarItem()`.
 
 Dos cosas que en la otra app de Jonas salieron mal y acá van bien desde el
 principio:
 
 - **`/confirm` debe verificar contra Shopify.** El `plan_handle` de la URL se usa
-  como pista; el plan solo se escribe si `activeSubscriptions` lo confirma. En la
+  como pista; el plan sólo se escribe si `activeSubscriptions` lo confirma. En la
   otra app se escribe directo desde `?plan_handle=`, así que cualquier merchant
   autenticado se sube de plan visitando una URL.
 - **La salvaguarda anti-degradación debe distinguir "no sé" de "no tiene".** Ante
@@ -1010,23 +1015,47 @@ principio:
   viene **sin errores** y con `activeSubscriptions: []`, eso es una confirmación
   de que no hay suscripción — ahí sí se baja. Sin esto, una cancelación no se
   refleja nunca.
-- **Nada de `catch` que solo hace `console.error`.**
+- **Nada de `catch` que sólo hace `console.error`.**
 
-### Decisión consciente: el parpadeo lo tiene la tienda que no paga
+### Por qué el paywall se sacó entero
 
-Sin suscripción activa, el storefront **retira** los corazones, el contador y
-el panel. Pero los corazones se inyectan al iniciar y la señal `activo: false`
-llega con la primera respuesta de `/proxy/lists`, así que en una tienda sin
-plan puede haber un parpadeo de unos milisegundos antes de que desaparezcan.
+Hubo un paywall duro: sin suscripción, el storefront devolvía 402 y el admin
+entero redirigía a la pantalla de planes. **Se eliminó.** Dos razones, las dos
+de peso:
 
-**Se eligió así.** Evitarlo obligaría a esperar la respuesta antes de inyectar
-nada, y eso le agregaría retraso a **todas** las tiendas, incluidas las que
-pagan. El parpadeo lo tiene la que no paga.
+- Una app pública no puede secuestrarse a sí misma detrás de un muro. El
+  revisor de Shopify instala y prueba sin suscribirse: aterrizar en un cartel
+  de "pagá para usar" era la vía más corta al rechazo.
+- El merchant prueba antes de pagar. Con el muro no podía ni ver qué compraba.
 
-El control que de verdad cuenta no es visual: es el 402 del servidor, que pasa
-por `autorizarEscritura` y no se puede esquivar desde el navegador.
+Lo que reemplaza al muro es el límite de productos por lista. Con eso el
+merchant conoce la app entera, y paga cuando sus compradores se topan con el
+tope — que es justo cuando la app le está sirviendo.
 
----
+Consecuencias que hay que sostener:
+
+- **Nada se borra ni se esconde nunca.** Una lista que quedó con 40 favoritos
+  porque la tienda bajó de Pro a Gratis los sigue mostrando, y se pueden
+  quitar. Lo único que no se puede es agregar más.
+- **El límite no aplica a lo ya guardado.** Re-mandar un favorito que ya está
+  en la lista devuelve OK aunque esté llena: el comprador no está agregando
+  nada. Esto **falló** al escribirlo —el conteo se miraba antes de descartar el
+  duplicado— y lo agarró `npm run test:limite`.
+- **El aviso lo escribe el merchant.** El texto del tope es un editable del app
+  embed (`texto_lista_llena`), no una cadena nuestra.
+- **El dashboard avisa solo.** Cuando hay listas en el tope, y sólo entonces,
+  aparece la sección que lo dice. Si nadie lo toca, no hay ruido.
+
+### El tope de Pro son 200, y la pantalla de precios lo dice
+
+Pro se pensó como "sin límite", pero `LIMITE_ITEMS_PRO = 200`: es la guarda
+contra abuso que existe desde la Fase 2.1, y tiene que existir porque el
+`anonymousId` lo genera el cliente y puede rotarlo.
+
+La pantalla de precios dice **"Hasta 200 productos por lista"** y no "sin
+límite". Prometer ilimitado en una página de precios y cortar en 200 es texto
+que no se cumple. Doscientos favoritos en una lista está muy por encima de
+cualquier uso real, así que el número no molesta a nadie; la promesa falsa sí.
 
 ### Por qué la Admin API y no la Partner API para leer el plan
 
@@ -1201,6 +1230,7 @@ npm run typecheck        # react-router typegen && tsc --noEmit
 npm run build            # construye assets del tema y la app
 npm run build:theme      # solo los assets del tema, con control de tamaño
 npm run test:theme       # banco de pruebas del storefront en :8787
+npm run test:limite      # limite por plan, contra la base de datos real
 npm run migrate:deploy   # aplica migraciones a Neon
 shopify app deploy       # publica la extensión y la config
 shopify app config validate
@@ -1208,8 +1238,8 @@ shopify app config validate
 
 ### El banco de pruebas del storefront
 
-`npm run test:theme` y abrir `http://localhost:8787`. Cinco modos, hay que pasar
-por todos:
+`npm run test:theme` y abrir `http://localhost:8787`. Hay que pasar por **todos**
+los modos de la tabla, no por algunos:
 
 | URL | Qué comprueba |
 |---|---|
@@ -1223,9 +1253,16 @@ por todos:
 | `/?pagina&secciones-nulas` | hay panel pero Shopify devuelve `sections: null`: también va a `/cart` |
 | `/?config-alt` | el merchant cambió la config del embed: estrella, en línea, sin contador |
 | `/?pagina&config-alt` | lo mismo, para la clase de botón del tema |
+| `/?lista-llena` | la lista llegó al tope del plan: la app sigue entera, sólo falla agregar |
 
-Los dos últimos **terminan navegando a propósito**: aterrizar en `/cart` es el
-resultado que se comprueba, y la página de destino la sirve el propio banco.
+`sin-drawer` y `secciones-nulas` **hay que correrlos con `&pagina`**. Sueltos dan
+verde sin probar nada: el clic al carrito vive dentro del bloque de la página.
+Los dos **terminan navegando a propósito** — aterrizar en `/cart` es el resultado
+que se comprueba, y la página de destino la sirve el propio banco.
+
+Lo que el banco **no** puede probar es el servidor: simula al navegador, y el
+navegador nunca manda un alta de algo que ya tiene guardado. Ese caso vive en
+`npm run test:limite`, que corre contra la base de verdad.
 
 Simula un header estilo Dawn con cinco enlaces al carrito, cinco formas de
 tarjeta de producto y un banner promocional. Esos casos están porque **cada uno

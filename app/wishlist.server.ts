@@ -234,6 +234,11 @@ export async function agregarItem(
   shopId: string,
   identidad: Identidad,
   cuerpo: Record<string, unknown>,
+  /**
+   * Cuántos favoritos entran en la lista. Lo decide el plan de la tienda, no
+   * una constante: es el único lugar donde el cobro toca al comprador.
+   */
+  limiteItems: number,
 ) {
   const productId = normalizarGid(cuerpo.productId, "Product");
   if (!productId) throw new ErrorApi(400, "productoRequerido");
@@ -249,10 +254,23 @@ export async function agregarItem(
       ? await obtenerOCrearListaPredeterminada(shopId, identidad)
       : await buscarListaPropia(shopId, identidad, cuerpo.listId);
 
+  // El límite se mira DESPUÉS de descartar que ya esté guardado, y no antes.
+  // Si no, una lista llena contesta "está llena" a alguien que no está
+  // agregando nada —vuelve a mandar lo mismo porque tiene dos pestañas
+  // abiertas, o porque reintenta tras un fallo de red— y el comprador se queda
+  // sin entender qué hacer. El límite es para las altas nuevas.
+  const yaEstaba = await prisma.wishlistItem.findFirst({
+    where: { wishlistId: lista.id, productId, variantId },
+  });
+  if (yaEstaba) return { lista, item: yaEstaba, creado: false };
+
   const cuantos = await prisma.wishlistItem.count({
     where: { wishlistId: lista.id },
   });
-  if (cuantos >= LIMITES.itemsPorLista) {
+  // Los favoritos que ya estén por encima del límite NO se borran ni se
+  // esconden: se siguen viendo y se pueden quitar. Lo único que no se puede es
+  // agregar más. Si la tienda baja de PRO a FREE, nadie pierde nada.
+  if (cuantos >= limiteItems) {
     throw new ErrorApi(409, "listaLlena");
   }
 
@@ -266,7 +284,8 @@ export async function agregarItem(
     };
   } catch (e) {
     if (!esErrorDeUnicidad(e)) throw e;
-    // Ya estaba guardado. Alta idempotente: no es un error para el comprador.
+    // Dos altas iguales al mismo tiempo: la lectura de arriba no vio nada y la
+    // unicidad de la base cortó la segunda. Alta idempotente, no un error.
     const item = await prisma.wishlistItem.findFirst({
       where: { wishlistId: lista.id, productId, variantId },
     });

@@ -34,6 +34,33 @@ export async function registrarAgregadoAlCarrito(
   return count;
 }
 
+/**
+ * Cuántas listas de la tienda ya no pueden guardar más.
+ *
+ * Es lo que convierte el límite en algo accionable para el merchant: si nadie
+ * lo toca, el aviso no aparece y no hay ruido. Cuando aparece, es el momento
+ * exacto en que subir de plan tiene sentido.
+ *
+ * Va en SQL crudo por lo mismo que `masDeseados`: `WishlistItem` no tiene
+ * `shopId` y el `groupBy` de Prisma no agrupa a través de una relación.
+ */
+export async function listasEnElLimite(
+  shopId: string,
+  limite: number,
+): Promise<number> {
+  const filas = await prisma.$queryRaw<{ cuantas: bigint }[]>`
+    SELECT COUNT(*)::bigint AS cuantas FROM (
+      SELECT i."wishlistId"
+      FROM "WishlistItem" i
+      JOIN "Wishlist" w ON w."id" = i."wishlistId"
+      WHERE w."shopId" = ${shopId}
+      GROUP BY i."wishlistId"
+      HAVING COUNT(*) >= ${limite}
+    ) AS llenas
+  `;
+  return Number(filas[0]?.cuantas ?? 0);
+}
+
 export type ProductoDeseado = {
   productId: string;
   guardados: number;

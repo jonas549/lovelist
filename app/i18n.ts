@@ -91,46 +91,66 @@ export const es = {
     botonProductoAyuda:
       "Usa la misma configuración: se agrega una sola vez y hereda el ícono, los colores y los textos.",
   },
-  /** Pantalla de planes y cobro. */
+  /**
+   * Pantalla de planes.
+   *
+   * NO es un paywall: la app funciona entera sin pagar. Lo único que cambia
+   * entre planes es cuántos favoritos entran por lista. Así el revisor de
+   * Shopify prueba todo sin suscribirse y el merchant prueba antes de pagar.
+   */
   planes: {
     titulo: "Plan",
-    heroTitulo: "Activa Lovelist en tu tienda",
-    heroTexto:
-      "Listas de favoritos para tus compradores: corazones en colecciones y fichas, panel lateral, página de favoritos y listas que se pueden compartir.",
-    precio: "US$ 29 por mes",
-    precioAyuda:
-      "Se cobra junto con tu factura de Shopify. Puedes cancelar cuando quieras desde tu panel de Shopify.",
-    elegir: "Elegir plan",
-    queIncluye: "Qué incluye",
+    intro:
+      "Lovelist funciona completo en los dos planes. Lo único que cambia es cuántos productos puede guardar cada comprador en una lista.",
+
+    tuPlan: "Tu plan",
+    enFree: "Estás en el plan Gratis.",
+    enPro: "Estás en el plan Pro.",
+
+    freeTitulo: "Gratis",
+    freePrecio: "Sin costo",
+    freeLimite: "Hasta {n} productos por lista",
+    proTitulo: "Pro",
+    proPrecio: "US$ 29 por mes",
+    // Dice el número real y no "sin límite": PRO tiene un tope técnico de 200
+    // por lista —la guarda contra abuso, porque el id del visitante lo genera
+    // el cliente y puede rotarlo—. Prometer "ilimitado" en la pantalla de
+    // precios de una app pública y después cortar en 200 es texto que no se
+    // cumple. Doscientos está muy por encima de cualquier lista real.
+    proLimite: "Hasta {n} productos por lista",
+    proAyuda:
+      "Se cobra junto con tu factura de Shopify. Puedes cancelar cuando quieras.",
+
+    enLosDos: "En los dos planes",
     inc1: "Corazones en páginas de colección y en la ficha de producto.",
     inc2: "Panel lateral y página de favoritos con el diseño de tu tema.",
     inc3: "Favoritos para quien no tiene cuenta, que se conservan al registrarse.",
     inc4: "Listas que se comparten por enlace, WhatsApp o email.",
     inc5: "Panel con los productos más deseados de tu tienda.",
 
-    activoTitulo: "Tu plan está activo",
-    activoTexto: "Lovelist está funcionando en tu tienda.",
-    gestionar: "Gestionar el plan en Shopify",
+    subir: "Cambiar a Pro",
+    gestionar: "Gestionar mi plan en Shopify",
+    gestionarAyuda:
+      "Desde tu panel de Shopify puedes cambiar de plan o cancelar cuando quieras.",
 
-    // Se ve cuando la tienda tuvo plan y ya no lo tiene.
-    sinPlanTitulo: "Lovelist está en pausa",
-    sinPlanTexto:
-      "Los favoritos que tus compradores ya habían guardado siguen guardados y vuelven a estar disponibles apenas actives el plan. No se borra nada.",
-
-    // Nota discreta, no un cartel de error. Es lo primero que ve un revisor de
-    // Shopify si entra antes de que el plan esté publicado, y una pantalla en
-    // rojo se lee como app rota aunque el motivo sea de configuración.
+    // Nota discreta, no un cartel de error: si un revisor entra antes de que
+    // el plan esté publicado, una pantalla en rojo se lee como app rota.
     faltaHandle:
-      "La suscripción se habilita en unos minutos. Si necesitas activarla ahora, escribinos a {correo}.",
+      "El plan Pro se habilita en unos minutos. Si necesitas activarlo ahora, escribinos a {correo}.",
 
-    confirmandoTitulo: "Confirmando tu plan",
-    confirmadoTitulo: "¡Listo! Tu plan está activo",
-    confirmadoTexto: "Ya puedes usar Lovelist en tu tienda.",
+    confirmadoTitulo: "¡Listo! Tu plan Pro está activo",
+    confirmadoTexto: "Tus compradores ya pueden guardar sin límite.",
     confirmadoIr: "Ir al inicio",
     noConfirmadoTitulo: "Todavía no vemos tu suscripción",
     noConfirmadoTexto:
       "Si acabas de suscribirte, puede tardar unos segundos en registrarse. Vuelve a comprobar; si sigue igual, escribinos.",
     reintentar: "Volver a comprobar",
+
+    // Aviso del dashboard, cuando el límite del gratuito empieza a estorbar.
+    avisoTitulo: "Hay compradores que llegaron al límite",
+    avisoTexto:
+      "{n} de tus listas alcanzaron los {limite} productos del plan Gratis y no pueden guardar más. Con Pro guardan sin límite.",
+    avisoBoton: "Ver el plan Pro",
   },
   /** Pantalla de soporte. */
   soporte: {
@@ -228,14 +248,10 @@ export const es = {
     noSePuedeBorrarPredeterminada: "No podés borrar tu lista de favoritos.",
     fusionSinSesion: "Necesitás iniciar sesión para unir tus favoritos.",
     demasiadasListas: "Llegaste al máximo de listas.",
-    listaLlena: "Esta lista llegó al máximo de productos.",
+    listaLlena: "Esta lista alcanzó su límite de productos.",
     demasiadasEscrituras:
       "Estás haciendo demasiados cambios muy rápido. Esperá un momento.",
     firmaInvalida: "No pudimos validar la solicitud.",
-    // Lo ve el comprador, no el merchant: no puede decir "la tienda no pagó".
-    // El storefront además esconde los corazones cuando llega esta señal, así
-    // que este mensaje es la última red y casi nunca se ve.
-    sinPlanActivo: "Los favoritos no están disponibles en este momento.",
     errorInterno: "Algo salió mal. Intentá de nuevo.",
   },
 } as const;

@@ -8,7 +8,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
 import { buscarShop } from "../proxy.server";
-import { kpis, masDeseados, type Kpis } from "../metricas.server";
+import { kpis, listasEnElLimite, masDeseados, type Kpis } from "../metricas.server";
 import {
   confirmarBotonProducto,
   enlacesDelEditor,
@@ -16,6 +16,7 @@ import {
   type EstadoPrimerosPasos,
 } from "../onboarding.server";
 import { resolverProductos } from "../productos.server";
+import { LIMITE_ITEMS_FREE, limiteItemsPorLista, tienePlanActivo } from "../plan.server";
 import { t, ti } from "../i18n";
 
 type Deseado = {
@@ -53,12 +54,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         agregadosAlCarritoUltimos30: 0,
       } satisfies Kpis,
       deseados: [] as Deseado[],
+      listasLlenas: 0,
+      limiteFree: LIMITE_ITEMS_FREE,
+      pro: false,
     };
   }
 
-  const [numeros, top] = await Promise.all([
+  const [numeros, top, listasLlenas] = await Promise.all([
     kpis(shop.id),
     masDeseados(shop.id, 10),
+    // Solo interesa cuando el límite estorba de verdad, o sea en el gratuito.
+    tienePlanActivo(shop) ? Promise.resolve(0) : listasEnElLimite(shop.id, limiteItemsPorLista(shop)),
   ]);
 
   // Los datos de producto no se guardan: se leen de Shopify al mostrar. Si la
@@ -88,7 +94,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     };
   });
 
-  return { shop: session.shop, pasos, enlaces, numeros, deseados };
+  return {
+    shop: session.shop,
+    pasos,
+    enlaces,
+    numeros,
+    deseados,
+    listasLlenas,
+    limiteFree: LIMITE_ITEMS_FREE,
+    pro: tienePlanActivo(shop),
+  };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -240,11 +255,26 @@ function PrimerosPasos({
 }
 
 export default function Index() {
-  const { pasos, enlaces, numeros, deseados } = useLoaderData<typeof loader>();
+  const { pasos, enlaces, numeros, deseados, listasLlenas, limiteFree, pro } =
+    useLoaderData<typeof loader>();
 
   return (
     <s-page heading={t("app.titulo")}>
       <PrimerosPasos pasos={pasos} enlaces={enlaces} />
+
+      {/* El aviso solo aparece cuando el límite del gratuito ya está
+          estorbando: alguien quiso guardar y no pudo. Es el momento exacto en
+          que subir de plan tiene sentido, y hasta entonces no hay ruido. */}
+      {!pro && listasLlenas > 0 ? (
+        <s-section heading={t("planes.avisoTitulo")}>
+          <s-paragraph>
+            {ti("planes.avisoTexto", { n: listasLlenas, limite: limiteFree })}
+          </s-paragraph>
+          <s-button href="/app/plans" variant="primary">
+            {t("planes.avisoBoton")}
+          </s-button>
+        </s-section>
+      ) : null}
 
       <s-section heading={t("metricas.titulo")}>
         <div

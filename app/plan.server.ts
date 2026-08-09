@@ -233,6 +233,29 @@ export function tienePlanActivo(shop: Pick<Shop, "plan"> | null): boolean {
 }
 
 /**
+ * Cuántos productos entran en una lista según el plan.
+ *
+ * Esto reemplaza al paywall. La app **no se bloquea** sin suscripción: los
+ * corazones, el panel, la página y compartir funcionan igual. Lo único que
+ * cambia es cuántos favoritos entran por lista.
+ *
+ * Así el revisor de Shopify puede instalar y probar la app entera sin
+ * suscribirse, que era el mayor riesgo de rechazo, y el merchant prueba antes
+ * de pagar.
+ *
+ * El tope de PRO no es comercial: es la guarda contra abuso que existe desde
+ * la Fase 2.1. El `anonymousId` lo genera el cliente y puede rotarlo, así que
+ * alguna cota tiene que haber. Doscientos favoritos en una sola lista está muy
+ * por encima de cualquier uso real.
+ */
+export const LIMITE_ITEMS_FREE = 10;
+export const LIMITE_ITEMS_PRO = 200;
+
+export function limiteItemsPorLista(shop: Pick<Shop, "plan"> | null): number {
+  return tienePlanActivo(shop) ? LIMITE_ITEMS_PRO : LIMITE_ITEMS_FREE;
+}
+
+/**
  * El handle de la app, para armar la URL de la página de precios de Shopify.
  *
  * Sin valor de reserva a propósito. Un valor inventado en el código produciría
