@@ -19,35 +19,107 @@ export const es = {
     cancelar: "Cancelar",
     errorGenerico: "Ocurrió un error. Intentá de nuevo.",
   },
-  /** Guía de primeros pasos del dashboard. */
+  /**
+   * Guía de primeros pasos del dashboard.
+   *
+   * Está escrita desde lo que gana el merchant, no desde cómo funcionamos por
+   * dentro. Una versión anterior explicaba que no podíamos verificar el
+   * segundo paso porque no pedimos cierto permiso: al merchant eso no le sirve
+   * de nada, y a un revisor de Shopify le suena a app a medio hacer.
+   */
   inicio: {
     titulo: "Primeros pasos",
-    subtitulo:
-      "Lovelist no aparece en tu tienda hasta que completes estos dos pasos.",
+    subtitulo: "Completa estos dos pasos para que Lovelist aparezca en tu tienda.",
     listo: "Listo",
     pendiente: "Pendiente",
-    sinVerificar: "No lo podemos verificar",
     completo: "Todo listo. Lovelist ya está funcionando en tu tienda.",
 
-    embedTitulo: "Activar Lovelist en tu tema",
+    embedTitulo: "1. Activar Lovelist en tu tema",
     embedAyuda:
-      "Prende el panel de favoritos, el contador y los corazones en las páginas de colección. Sin esto, la app no se ve en ningún lado.",
+      "Enciende el panel de favoritos, el contador y los corazones en tus páginas de colección.",
     embedBoton: "Activar en el editor de temas",
-    embedDetectado: "Detectamos actividad en tu tienda",
-    embedDetectadoAyuda: "Última señal: {cuando}.",
-    embedSinDetectar: "Todavía no detectamos actividad",
-    embedSinDetectarAyuda:
-      "Lo detectamos cuando alguien visita tu tienda con Lovelist activo. Si ya lo activaste, abrí tu tienda en otra pestaña y volvé a comprobar: puede tardar un momento.",
+    embedDetectado: "Detectamos actividad en tu tienda. Última señal: {cuando}.",
+    // Nunca afirma que esté apagado: puede estar activo y sin visitas todavía,
+    // y no tenemos forma de distinguir una cosa de la otra.
+    embedSinDetectar:
+      "Todavía no detectamos actividad en tu tienda. Si ya lo activaste, abre tu tienda en otra pestaña y vuelve a comprobar.",
     embedComprobar: "Volver a comprobar",
 
-    botonTitulo: "Agregar el botón a la página de producto",
+    botonTitulo: "2. Agregar el botón a la página de producto",
     botonAyuda:
-      "Es el botón de guardar en la ficha de cada producto. Los corazones de las páginas de colección funcionan sin esto, pero la ficha es donde más se guarda.",
+      "Coloca el botón de guardar en la ficha de cada producto, que es donde más se usa. Los corazones de las páginas de colección ya funcionan sin este paso.",
     botonBoton: "Agregar en el editor de temas",
-    botonNoVerificable:
-      "Esto no lo podemos comprobar solos: haría falta un permiso para leer tu tema, y preferimos no pedirlo. Marcalo vos cuando lo hayas hecho.",
-    botonHecho: "Ya coloqué el botón en mi página de producto",
-    botonGuardado: "Anotado.",
+    botonHecho: "Ya agregué el botón a mi página de producto",
+  },
+  /** Navegación lateral de la app en el admin. */
+  nav: {
+    inicio: "Inicio",
+    configuracion: "Configuración",
+    soporte: "Soporte",
+    volver: "Volver al inicio",
+    ayudaPie: "¿Necesitas ayuda? Escribinos a {correo}.",
+  },
+  /** Pantalla de configuración. */
+  ajustes: {
+    titulo: "Configuración",
+    intro:
+      "La apariencia y los textos de Lovelist se configuran en el editor de temas, junto al resto de tu tienda. Así ves los cambios sobre tu propia tienda antes de publicarlos.",
+    abrirEditor: "Abrir el editor de temas",
+    donde: "Dónde encontrarlo",
+    dondeAyuda:
+      "En el editor de temas, abre Configuración → Incrustaciones de aplicaciones → Lovelist. El botón de arriba te lleva directo.",
+    queSePuede: "Qué puedes configurar",
+    // Sin arreglos: el tipado de claves de este archivo recorre solo objetos y
+    // cadenas, y un arreglo le mete los índices y los métodos del Array.
+    apariencia: "Apariencia",
+    aparienciaIcono:
+      "Ícono: corazón o estrella, y si se rellena al guardar o queda en línea.",
+    aparienciaColores: "Color del ícono cuando está guardado y cuando no.",
+    aparienciaContador: "Mostrar u ocultar el contador del encabezado.",
+    aparienciaBotones:
+      "Clase CSS de los botones de tu tema, para que los de Lovelist se vean igual.",
+    textos: "Textos",
+    textosBoton: "Los textos del botón de guardar y del panel de favoritos.",
+    textosPagina:
+      "Los de la página de favoritos: título, agregar al carrito, quitar.",
+    textosCompartir:
+      "Los de compartir, incluidos el mensaje y el asunto del email.",
+    botonProducto: "Botón de la página de producto",
+    botonProductoAyuda:
+      "Usa la misma configuración: se agrega una sola vez y hereda el ícono, los colores y los textos.",
+  },
+  /** Pantalla de soporte. */
+  soporte: {
+    titulo: "Soporte",
+    intro: "Escribinos y te respondemos por correo, en español o en inglés.",
+    correo: "contacto@appsdeveloperspro.com",
+    escribir: "Escribir a soporte",
+    respuesta: "Respondemos dentro de los 2 días hábiles.",
+    preguntas: "Preguntas frecuentes",
+
+    pInstalar: "¿Cómo instalo Lovelist en mi tienda?",
+    rInstalar:
+      "Son dos pasos, los dos desde el editor de temas: activar la incrustación de Lovelist y agregar el botón a la página de producto. En Inicio tienes los enlaces directos y el estado de cada uno.",
+
+    pIcono: "¿Cómo cambio el ícono y los colores?",
+    rIcono:
+      "En el editor de temas, en Configuración → Incrustaciones de aplicaciones → Lovelist. Puedes elegir corazón o estrella, si se rellena al guardar, y los colores para guardado y sin guardar.",
+
+    pTextos: "¿Cómo cambio los textos que ve el comprador?",
+    rTextos:
+      "En el mismo lugar. Puedes cambiar los textos del botón, del panel, de la página de favoritos y de compartir. Si dejas uno vacío, se usa el texto original.",
+
+    pInvitados: "¿Qué pasa con los favoritos de quien no tiene cuenta?",
+    rInvitados:
+      "Se guardan igual y siguen ahí si vuelve desde el mismo navegador. Cuando esa persona inicia sesión, sus favoritos se suman a los de su cuenta sin perder nada ni duplicarse.",
+
+    pCompartir: "¿Cómo funciona compartir una lista?",
+    rCompartir:
+      "Quien tiene la lista genera un enlace desde la página de favoritos. Ese enlace muestra los productos en modo lectura y permite agregarlos al carrito, pero no editar la lista ni ver datos de quien la compartió. Las listas compartidas no aparecen en buscadores.",
+
+    pDatos: "¿Qué datos guarda Lovelist?",
+    rDatos:
+      "Solo qué productos se guardaron y en qué lista. No guardamos nombre, correo ni dirección de nadie, y los precios e imágenes se leen de tu catálogo en el momento de mostrarlos, así que nunca se muestran desactualizados.",
   },
   /** Métricas del dashboard. */
   metricas: {

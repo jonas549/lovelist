@@ -174,10 +174,10 @@ function PrimerosPasos({
           <s-paragraph>
             <s-text color="subdued">
               {pasos.embedDetectado
-                ? `${t("inicio.embedDetectado")}. ${ti("inicio.embedDetectadoAyuda", {
+                ? ti("inicio.embedDetectado", {
                     cuando: cuandoLegible(pasos.embedVistoAt),
-                  })}`
-                : `${t("inicio.embedSinDetectar")}. ${t("inicio.embedSinDetectarAyuda")}`}
+                  })
+                : t("inicio.embedSinDetectar")}
             </s-text>
           </s-paragraph>
 
@@ -202,16 +202,13 @@ function PrimerosPasos({
       <s-box padding="base">
         <s-stack direction="block" gap="base">
           <s-stack direction="inline" gap="base" alignItems="center">
-            <s-badge tone={confirmado ? "success" : "info"}>
-              {confirmado ? t("inicio.listo") : t("inicio.sinVerificar")}
+            <s-badge tone={confirmado ? "success" : "warning"}>
+              {confirmado ? t("inicio.listo") : t("inicio.pendiente")}
             </s-badge>
             <s-heading>{t("inicio.botonTitulo")}</s-heading>
           </s-stack>
 
           <s-paragraph>{t("inicio.botonAyuda")}</s-paragraph>
-          <s-paragraph>
-            <s-text color="subdued">{t("inicio.botonNoVerificable")}</s-text>
-          </s-paragraph>
 
           <s-button href={enlaces.boton} target="_blank" variant="secondary">
             {t("inicio.botonBoton")}

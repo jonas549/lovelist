@@ -4,6 +4,7 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 
 import { authenticate } from "../shopify.server";
+import { t, ti } from "../i18n";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
@@ -17,8 +18,26 @@ export default function App() {
 
   return (
     <AppProvider embedded apiKey={apiKey}>
-      {/* Sin <s-app-nav> por ahora: Lovelist tiene una sola página. */}
+      {/* La navegación la pinta el admin en su barra lateral, no nosotros.
+          `rel="home"` marca cuál es la pantalla de entrada. */}
+      <s-app-nav>
+        <a href="/app" rel="home">
+          {t("nav.inicio")}
+        </a>
+        <a href="/app/settings">{t("nav.configuracion")}</a>
+        <a href="/app/support">{t("nav.soporte")}</a>
+      </s-app-nav>
+
       <Outlet />
+
+      {/* Pie de ayuda en todas las páginas: Shopify lo pide explícitamente
+          para las apps públicas, y enlaza a una pantalla propia y no a una
+          landing. */}
+      <s-box padding="base">
+        <s-text color="subdued">
+          {ti("nav.ayudaPie", { correo: t("soporte.correo") })}
+        </s-text>
+      </s-box>
     </AppProvider>
   );
 }
