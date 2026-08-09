@@ -56,7 +56,9 @@ export const es = {
     inicio: "Inicio",
     configuracion: "Configuración",
     soporte: "Soporte",
-    volver: "Volver al inicio",
+    // Corto a propósito: va en la miga de pan del admin, que tiene poco
+    // espacio y trunca. "Volver al inicio" salía cortado como "Volver a…".
+    volver: "Inicio",
     ayudaPie: "¿Necesitas ayuda? Escribinos a {correo}.",
   },
   /** Pantalla de configuración. */
