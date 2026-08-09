@@ -14,6 +14,8 @@
  *   /?logueado        con sesión iniciada y favoritos de invitado: debe fusionar
  *   /?merge-falla     la fusión falla: debe conservar el anonymousId y reintentar
  *   /?pagina          la página completa: grilla, carrito, compartir y quitar
+ *   /?pagina&sin-drawer  un tema SIN panel de carrito: el respaldo tiene que
+ *                     avisar en la página y no llevarse al comprador puesto
  *
  * Por qué existe: la primera versión de este banco daba todo en verde y aun así
  * se escaparon tres fallos a producción (los corazones no recordaban nada, el

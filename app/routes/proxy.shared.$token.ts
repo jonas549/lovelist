@@ -6,7 +6,11 @@ import {
   respuestaLiquid,
 } from "../liquid.server";
 import { buscarShop, manejar, verificarFirmaProxy } from "../proxy.server";
-import { resolverProductos, type ProductoResuelto } from "../productos.server";
+import {
+  claveDeItem,
+  resolverProductos,
+  type ProductoResuelto,
+} from "../productos.server";
 import { buscarListaCompartida } from "../wishlist.server";
 import { t } from "../i18n";
 
@@ -50,8 +54,10 @@ export const loader = ({ request, params }: LoaderFunctionArgs) =>
     );
 
     // Se respeta el orden de la lista y se omiten los que ya no se pueden ver.
+    // Se busca por producto+variante: dos favoritos del mismo artículo con
+    // distinta variante son dos entradas y se muestran las dos.
     const productos = lista.items
-      .map((i) => resueltos.get(i.productId))
+      .map((i) => resueltos.get(claveDeItem(i)))
       .filter((p): p is ProductoResuelto => Boolean(p));
 
     const cuerpo = `
@@ -82,14 +88,22 @@ function vacia(): string {
 
 function grilla(productos: ProductoResuelto[]): string {
   const tarjetas = productos.map(tarjeta).join("\n");
-  const comprables = productos.filter((p) => p.variantIdParaCarrito);
+
+  // Sin repetir: dos favoritos distintos pueden terminar apuntando a la misma
+  // variante vendible —uno guardado sin elegir variante y otro con esa misma
+  // elegida— y mandarla dos veces la agregaría al carrito por duplicado.
+  const comprables = [
+    ...new Set(
+      productos
+        .map((p) => p.variantIdParaCarrito)
+        .filter((v): v is string => Boolean(v)),
+    ),
+  ];
 
   const agregarTodo = comprables.length
     ? `<div class="lovelist-pagina-acciones">
          <button type="button" class="lovelist-boton-principal"
-                 data-lovelist-agregar-todo="${escaparLiquid(
-                   comprables.map((p) => p.variantIdParaCarrito).join(","),
-                 )}">
+                 data-lovelist-agregar-todo="${escaparLiquid(comprables.join(","))}">
            ${escaparLiquid(t("pagina.agregarTodo"))}
          </button>
        </div>`

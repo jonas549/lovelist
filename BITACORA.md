@@ -848,6 +848,7 @@ por todos:
 | `/?logueado` | fusión al iniciar sesión |
 | `/?merge-falla` | la fusión falla: conserva el `anonymousId` y reintenta |
 | `/?pagina` | página completa: grilla, carrito, compartir, quitar |
+| `/?pagina&sin-drawer` | tema sin panel de carrito: avisa sin sacar al comprador |
 
 Simula un header estilo Dawn con cinco enlaces al carrito, cinco formas de
 tarjeta de producto y un banner promocional. Esos casos están porque **cada uno

@@ -289,9 +289,19 @@
    */
   var yaPedidos = {};
 
+  /**
+   * La identidad de un favorito es producto+variante, no el producto.
+   *
+   * Guardar la camisa negra y la blanca son dos decisiones distintas y se ven
+   * como dos favoritos. Tiene que coincidir con `claveDeItem` del servidor.
+   */
+  function clave(item) {
+    return item.productId + "|" + (item.variantId || "");
+  }
+
   function asegurarProductos() {
     var falta = estado.items.some(function (i) {
-      return !yaPedidos[i.productId];
+      return !yaPedidos[clave(i)];
     });
     if (!falta) {
       estado.productosListos = true;
@@ -302,13 +312,13 @@
       .then(function (r) {
         var mapa = {};
         (r.products || []).forEach(function (p) {
-          mapa[p.productId] = p;
+          mapa[p.clave] = p;
         });
         estado.productos = mapa;
         // Marcamos incluso los que no vinieron: un producto borrado no va a
         // aparecer nunca, y sin esto lo volveríamos a pedir en cada repintado.
         estado.items.forEach(function (i) {
-          yaPedidos[i.productId] = true;
+          yaPedidos[clave(i)] = true;
         });
         estado.productosListos = true;
       })
@@ -352,10 +362,44 @@
     });
   }
 
-  /** Agrega variantes al carrito del tema y lleva al carrito. */
+  /**
+   * Agrega variantes al carrito SIN sacar al comprador de donde está.
+   *
+   * Antes esto mandaba a /cart. Está mal para el Shopify de hoy: la mayoría de
+   * los temas usan un panel lateral, muchos merchants ni siquiera tienen
+   * habilitada la página de carrito, y varios llevan directo al pago. Sacar a
+   * alguien de donde está justo cuando decidió comprar es perder la venta.
+   *
+   * No hay una forma unificada de refrescar el panel del tema: Shopify lo
+   * confirmó en su foro de desarrolladores y el drawer es del tema, no suyo.
+   * Así que se intenta en tres capas, de la más específica a la más general, y
+   * ninguna adivina selectores del tema:
+   *
+   *   1. Se le PREGUNTA al tema qué secciones renderizar, con el método
+   *      público `getSectionsToRender()` de su elemento <cart-drawer>, y se
+   *      piden en el mismo /cart/add.js. Es la misma llamada que hace el
+   *      formulario de producto de Dawn.
+   *   2. Se le entrega el resultado por su propio método público
+   *      `renderContents()`, que en Dawn actualiza el panel y lo abre solo.
+   *      Cubre Dawn y toda su familia.
+   *   3. Se despachan los eventos que escuchan los demás: `cart:update` para
+   *      Horizon 3+ y `cart:refresh` para varios otros. Si nadie escucha, no
+   *      pasa nada.
+   *
+   * Y si no hay panel, se avisa acá mismo con un enlace al carrito. El carrito
+   * queda bien igual; lo único que no pasa es que se abra un panel.
+   */
   function alCarrito(ids) {
+    // Sin repetir: dos favoritos distintos del mismo producto pueden apuntar a
+    // la misma variante vendible, y mandarla dos veces la agrega por duplicado.
+    var vistos = {};
     var items = ids
       .filter(Boolean)
+      .filter(function (id) {
+        if (vistos[id]) return false;
+        vistos[id] = true;
+        return true;
+      })
       .map(function (id) {
         return { id: Number(id), quantity: 1 };
       })
@@ -364,23 +408,110 @@
       });
     if (!items.length) return;
 
+    var panel = panelDelTema();
+    var cuerpo = { items: items };
+
+    var secciones = seccionesDelPanel(panel);
+    if (secciones) {
+      cuerpo.sections = secciones;
+      cuerpo.sections_url = window.location.pathname;
+    }
+
     fetch("/cart/add.js", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ items: items }),
+      body: JSON.stringify(cuerpo),
     })
       .then(function (r) {
         if (!r.ok) throw new Error("carrito " + r.status);
         return r.json();
       })
-      .then(function () {
-        window.location.href = "/cart";
+      .then(function (respuesta) {
+        pintarContador();
+        avisarAlTema(items.length);
+
+        if (panel && typeof panel.renderContents === "function") {
+          // En Dawn esto actualiza el contenido y abre el panel solo, así que
+          // no hace falta ningún aviso nuestro: el comprador ve su carrito.
+          try {
+            panel.renderContents(respuesta);
+            return;
+          } catch (e) {
+            registrar("el panel del tema no acepto el contenido", e);
+          }
+        }
+
+        avisarConEnlaceAlCarrito();
       })
       .catch(function (e) {
         registrar("no se pudo agregar al carrito", e);
         avisar(T.errorCarrito);
       });
+  }
+
+  /** El <cart-drawer> del tema, si lo hay. No se buscan clases ni ids. */
+  function panelDelTema() {
+    try {
+      return document.querySelector("cart-drawer");
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * Qué secciones pedirle a Shopify que renderice, según el propio tema.
+   *
+   * No las escribimos nosotros: se las pedimos al elemento del tema. Si algún
+   * día Dawn cambia sus secciones, esto lo sigue sin que toquemos nada.
+   */
+  function seccionesDelPanel(panel) {
+    if (!panel || typeof panel.getSectionsToRender !== "function") return null;
+    try {
+      var lista = panel.getSectionsToRender() || [];
+      var ids = [];
+      for (var i = 0; i < lista.length; i++) {
+        var id = lista[i] && lista[i].id;
+        if (id) ids.push(id);
+      }
+      return ids.length ? ids : null;
+    } catch (e) {
+      registrar("no se pudieron leer las secciones del tema", e);
+      return null;
+    }
+  }
+
+  /** Eventos de carrito que escuchan los temas que no son de la familia Dawn. */
+  function avisarAlTema(cantidad) {
+    try {
+      document.dispatchEvent(
+        new CustomEvent("cart:update", {
+          bubbles: true,
+          detail: { data: { source: "lovelist", itemCount: cantidad } },
+        }),
+      );
+      document.documentElement.dispatchEvent(
+        new CustomEvent("cart:refresh", { bubbles: true }),
+      );
+    } catch (e) {
+      // Un navegador sin CustomEvent no puede romper el agregado al carrito.
+      registrar("no se pudo avisar al tema", e);
+    }
+  }
+
+  /**
+   * Respaldo digno para un tema sin panel: confirmamos acá y ofrecemos ir al
+   * carrito, en vez de llevarlo a la fuerza.
+   */
+  function avisarConEnlaceAlCarrito() {
+    var caja = cajaDeAviso();
+    caja.textContent = T.agregadoAlCarrito + " ";
+    var a = document.createElement("a");
+    a.href = "/cart";
+    a.className = "lovelist-aviso-enlace";
+    a.textContent = T.verCarrito;
+    caja.appendChild(a);
+    mostrarAviso(caja);
   }
 
   /**
@@ -691,8 +822,7 @@
 
   var tiempoAviso;
 
-  function avisar(mensaje) {
-    if (!mensaje) return;
+  function cajaDeAviso() {
     var caja = document.getElementById("lovelist-aviso");
     if (!caja) {
       caja = document.createElement("div");
@@ -703,12 +833,23 @@
       caja.setAttribute("data-lovelist-ui", "");
       document.body.appendChild(caja);
     }
-    caja.textContent = mensaje;
+    caja.textContent = "";
+    return caja;
+  }
+
+  function mostrarAviso(caja) {
     caja.classList.add("lovelist-aviso-visible");
     clearTimeout(tiempoAviso);
     tiempoAviso = setTimeout(function () {
       caja.classList.remove("lovelist-aviso-visible");
     }, 4000);
+  }
+
+  function avisar(mensaje) {
+    if (!mensaje) return;
+    var caja = cajaDeAviso();
+    caja.textContent = mensaje;
+    mostrarAviso(caja);
   }
 
   // -------------------------------------------------------------------------
@@ -1062,7 +1203,7 @@
 
     var filas = [];
     estado.items.forEach(function (item) {
-      var p = estado.productos[item.productId];
+      var p = estado.productos[clave(item)];
       // Borrado, archivado o fuera del canal online: se oculta, no rompe nada.
       if (!p) return;
       filas.push(filaDrawer(item, p));
@@ -1103,6 +1244,13 @@
       '">' +
       escapar(p.title) +
       "</a>" +
+      // Sin esto, dos favoritos del mismo producto con distinta variante se
+      // ven como dos filas identicas y parecen un error de la app.
+      (p.varianteTitulo
+        ? '<span class="lovelist-item-variante">' +
+          escapar(p.varianteTitulo) +
+          "</span>"
+        : "") +
       '<span class="lovelist-item-precio">' +
       escapar(formatearMonto(p.precio, p.moneda)) +
       "</span>" +
@@ -1221,7 +1369,7 @@
 
     var visibles = [];
     items.forEach(function (item) {
-      var p = estado.productos[item.productId];
+      var p = estado.productos[clave(item)];
       if (p) visibles.push({ item: item, producto: p });
     });
 
@@ -1249,11 +1397,19 @@
       "</ul>";
 
     if (acciones) {
+      // Sin repetir: dos favoritos distintos pueden apuntar a la misma
+      // variante vendible y mandarla dos veces la agregaria por duplicado.
+      var yaEsta = {};
       var comprables = visibles
         .map(function (v) {
           return v.producto.variantIdParaCarrito;
         })
-        .filter(Boolean);
+        .filter(Boolean)
+        .filter(function (id) {
+          if (yaEsta[id]) return false;
+          yaEsta[id] = true;
+          return true;
+        });
 
       acciones.innerHTML =
         (comprables.length

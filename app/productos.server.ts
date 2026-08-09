@@ -43,7 +43,11 @@ const CONSULTA = `#graphql
 `;
 
 export type ProductoResuelto = {
+  /** productId|variantId — identifica al FAVORITO, no al producto. */
+  clave: string;
   productId: string;
+  /** La variante que el comprador eligió al guardar, o null si no eligió. */
+  variantId: string | null;
   title: string;
   handle: string;
   url: string;
@@ -59,16 +63,35 @@ export type ProductoResuelto = {
 
 type Referencia = { productId: string; variantId: string | null };
 
+/**
+ * La identidad de un favorito es el par producto+variante, no el producto.
+ *
+ * Guardar la camisa negra y la blanca son dos decisiones distintas del
+ * comprador y se muestran como dos favoritos. Colapsarlas lo obligaría a
+ * volver a elegir algo que ya había elegido.
+ *
+ * Tiene que coincidir con `claveItem` de wishlist.server.ts y con la del JS
+ * del storefront: las tres nombran la misma cosa.
+ */
+export function claveDeItem(referencia: Referencia): string {
+  return referencia.productId + "|" + (referencia.variantId ?? "");
+}
+
 function numerico(gid: string): string {
   return gid.slice(gid.lastIndexOf("/") + 1);
 }
 
 /**
- * Devuelve un mapa productId -> datos, omitiendo lo que ya no se puede mostrar.
+ * Devuelve un mapa clave(producto|variante) -> datos, omitiendo lo que ya no se
+ * puede mostrar.
  *
  * Se omiten a propósito, no se rompe la página: un producto borrado, archivado,
  * en borrador o despublicado del canal online simplemente desaparece de la
  * lista. Es lo que pide el plan y es lo que espera el comprador.
+ *
+ * Va indexado por favorito y no por producto. Cuando iba por producto, dos
+ * favoritos del mismo artículo se pisaban: el último en resolverse le
+ * sobreescribía la variante al otro, y los dos terminaban mostrando lo mismo.
  */
 export async function resolverProductos(
   shopDominio: string,
@@ -98,6 +121,7 @@ export async function resolverProductos(
     if (v?.id) variantesPorId.set(v.id, v);
   }
 
+  const productosPorId = new Map<string, ProductoCrudo>();
   for (const p of cuerpo.data?.productos ?? []) {
     if (!p?.id) continue;
 
@@ -109,11 +133,27 @@ export async function resolverProductos(
     // desarrollo la tienen—, así que habría escondido el catálogo entero.
     if (p.status !== "ACTIVE" || !p.publishedAt) continue;
 
-    const variantes = p.variants?.nodes ?? [];
-    const vendible = variantes.find((v) => v.availableForSale) ?? null;
+    productosPorId.set(p.id, p);
+  }
 
-    resultado.set(p.id, {
+  // Una entrada por FAVORITO. Dos favoritos del mismo producto —uno guardado
+  // desde una colección sin elegir variante, otro desde la ficha con la
+  // variante elegida— son dos entradas independientes, cada una con su precio,
+  // su disponibilidad y su nombre de variante.
+  for (const ref of referencias) {
+    const clave = claveDeItem(ref);
+    if (resultado.has(clave)) continue;
+
+    const p = productosPorId.get(ref.productId);
+    if (!p) continue;
+
+    const variantes = p.variants?.nodes ?? [];
+    const vendiblePorDefecto = variantes.find((v) => v.availableForSale) ?? null;
+
+    const entrada: ProductoResuelto = {
+      clave,
       productId: p.id,
+      variantId: ref.variantId,
       title: p.title,
       handle: p.handle,
       url: `/products/${p.handle}`,
@@ -121,34 +161,47 @@ export async function resolverProductos(
       imagenAlt: p.featuredMedia?.preview?.image?.altText ?? p.title,
       precio: p.priceRangeV2?.minVariantPrice?.amount ?? "0",
       moneda: p.priceRangeV2?.minVariantPrice?.currencyCode ?? "",
-      disponible: Boolean(vendible),
-      variantIdParaCarrito: vendible ? numerico(vendible.id) : null,
+      disponible: Boolean(vendiblePorDefecto),
+      variantIdParaCarrito: vendiblePorDefecto
+        ? numerico(vendiblePorDefecto.id)
+        : null,
+      // Sin variante elegida no se muestra ninguna, aunque abajo se use la
+      // primera vendible para el carrito: poner el nombre de una variante que
+      // el comprador no eligió es inventarle una decisión que no tomó, y hace
+      // que los dos favoritos del mismo producto se vean iguales.
       varianteTitulo: null,
-    });
-  }
+    };
 
-  // Si el item guardó una variante concreta, manda esa: es la que el comprador
-  // eligió. Solo se ignora si esa variante ya no se puede comprar.
-  for (const ref of referencias) {
-    if (!ref.variantId) continue;
-    const producto = resultado.get(ref.productId);
-    const variante = variantesPorId.get(ref.variantId);
-    if (!producto || !variante) continue;
+    // Si el favorito guardó una variante concreta, manda esa: es la que el
+    // comprador eligió. Solo se ignora para el carrito si ya no se puede
+    // comprar, pero el nombre se sigue mostrando.
+    const variante = ref.variantId
+      ? variantesPorId.get(ref.variantId)
+      : undefined;
 
-    // Un producto sin opciones reales igual tiene una variante, y Shopify la
-    // llama "Default Title". Es un nombre interno: mostrarlo debajo del titulo
-    // no le dice nada al comprador y encima desalinea la tarjeta con una linea
-    // de mas. Se pregunta por `hasOnlyDefaultVariant` en vez de comparar contra
-    // el string, que es un valor interno que no tenemos garantizado.
-    producto.varianteTitulo = variante.product?.hasOnlyDefaultVariant
-      ? null
-      : variante.title ?? null;
+    if (variante) {
+      // Un producto sin opciones reales igual tiene una variante, y Shopify la
+      // llama "Default Title". Es un nombre interno: mostrarlo debajo del
+      // titulo no le dice nada al comprador y encima desalinea la tarjeta con
+      // una linea de mas. Se pregunta por `hasOnlyDefaultVariant` en vez de
+      // comparar contra el string, que es un valor interno sin garantía.
+      entrada.varianteTitulo = variante.product?.hasOnlyDefaultVariant
+        ? null
+        : variante.title ?? null;
 
-    if (variante.availableForSale) {
-      producto.variantIdParaCarrito = numerico(variante.id);
-      producto.disponible = true;
-      producto.precio = variante.price ?? producto.precio;
+      if (variante.availableForSale) {
+        entrada.variantIdParaCarrito = numerico(variante.id);
+        entrada.disponible = true;
+        entrada.precio = variante.price ?? entrada.precio;
+      } else {
+        // La variante elegida se agotó. No se ofrece otra en su lugar: el
+        // comprador quiso ESA. Mejor mostrarla agotada que venderle otra.
+        entrada.disponible = false;
+        entrada.variantIdParaCarrito = null;
+      }
     }
+
+    resultado.set(clave, entrada);
   }
 
   return resultado;

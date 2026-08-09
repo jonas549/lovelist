@@ -93,6 +93,9 @@
   var PAGINA = /[?&]pagina/.test(location.search);
   var LOGUEADO = /[?&]logueado/.test(location.search);
   var MERGE_FALLA = /[?&]merge-falla/.test(location.search);
+  // Tema sin cart drawer: hay que comprobar que el respaldo sea digno y que
+  // NO se vaya del sitio, que es justamente lo que se venia haciendo mal.
+  var SIN_DRAWER = /[?&]sin-drawer/.test(location.search);
   var ANON_SEMBRADO = "11111111-2222-4333-8444-555555555555";
   if (LOGUEADO || MERGE_FALLA) {
     // Como si hubiera guardado cosas de invitado y recien ahora iniciara sesion.
@@ -111,11 +114,49 @@
     { id: "pre1", productId: "gid://shopify/Product/111111", variantId: null, addedAt: "" }
   ];
   if (PAGINA) {
-    // Dos items: uno comprable y otro agotado, para probar los dos caminos.
+    // Tres items, y el segundo es el caso que importa: MISMO producto que el
+    // primero pero con una variante elegida. Son dos favoritos distintos —
+    // guardar la camisa negra y la blanca son dos decisiones— y tienen que
+    // verse distinguidos, no colapsados en uno.
+    //
+    // Ademas los dos resuelven a la misma variante vendible cuando el item no
+    // trae una elegida, asi que "agregar todo" tiene que deduplicar antes de
+    // mandar o el carrito recibe la misma variante dos veces.
     GUARDADOS = [
       { id: "pre1", productId: "gid://shopify/Product/111111", variantId: null, addedAt: "" },
-      { id: "pre2", productId: "gid://shopify/Product/222222", variantId: null, addedAt: "" }
+      { id: "pre2", productId: "gid://shopify/Product/111111",
+        variantId: "gid://shopify/ProductVariant/9100", addedAt: "" },
+      { id: "pre3", productId: "gid://shopify/Product/222222", variantId: null, addedAt: "" }
     ];
+    // Doble del <cart-drawer> de Dawn. Expone la MISMA superficie publica que
+    // el elemento real: getSectionsToRender() para que le preguntemos que
+    // secciones pedir, y renderContents(), que en Dawn actualiza el contenido
+    // y abre el panel solo. No imitamos su HTML interno a proposito: si algun
+    // dia dependemos de su marcado, este doble deja de avisarnos.
+    if (!SIN_DRAWER) {
+      window.DRAWER = { secciones: 0, render: [], abierto: false };
+      document.write("<cart-drawer></cart-drawer>");
+      customElements.define("cart-drawer", class extends HTMLElement {
+        getSectionsToRender() {
+          window.DRAWER.secciones++;
+          return [{ id: "cart-drawer" }, { id: "cart-icon-bubble" }];
+        }
+        renderContents(estado) {
+          window.DRAWER.render.push(estado);
+          window.DRAWER.abierto = true;
+        }
+      });
+    }
+
+    // Eventos que escuchan los temas que no son de la familia Dawn.
+    window.EVENTOS = [];
+    document.addEventListener("cart:update", function (e) {
+      window.EVENTOS.push({ nombre: "cart:update", detalle: e.detail });
+    });
+    document.documentElement.addEventListener("cart:refresh", function () {
+      window.EVENTOS.push({ nombre: "cart:refresh" });
+    });
+
     // El armazon que manda el servidor en Liquid, tal cual.
     document.addEventListener("DOMContentLoaded", function () {}, false);
     document.write(
@@ -143,29 +184,51 @@
         ? [{ id: "l1", name: "Favoritos", isDefault: true, shareToken: null, shareUrl: null,
              itemCount: GUARDADOS.length, items: GUARDADOS.slice() }] : [] });
     }
-    // Nunca resuelve: asi el "agregar al carrito" no nos saca de la pagina y
-    // podemos comprobar que la peticion salio bien formada.
-    if (u.indexOf("/cart/add.js") === 0) return new Promise(function () {});
+    // Antes esta respuesta no resolvia nunca, porque al resolver el codigo se
+    // iba a /cart y se llevaba el banco puesto. Ahora agregar al carrito no
+    // navega, asi que puede responder de verdad: es la unica forma de probar
+    // que despues del alta se refresca el panel del tema.
+    if (u.indexOf("/cart/add.js") === 0) {
+      var pedido = JSON.parse((init && init.body) || "{}");
+      return j({
+        items: (pedido.items || []).map(function (i) {
+          return { id: i.id, quantity: i.quantity };
+        }),
+        sections: { "cart-drawer": "<div>panel</div>", "cart-icon-bubble": "<span>3</span>" }
+      });
+    }
 
     if (u.indexOf("/apps/lovelist/products") === 0) {
-      // Las dos tarjetas son deliberadamente desparejas EN ALTO: la primera
-      // suma una linea de variante y un boton de carrito; la segunda tiene
-      // titulo corto, sin variante, y el cartel de agotado. Esa diferencia es
-      // la que hacia que "Quitar" quedara a distinta altura en cada una.
+      // El servidor devuelve UNA entrada POR ITEM, no por producto, y cada una
+      // trae su `clave` (productId|variantId). Antes venia una por producto y
+      // por eso dos favoritos del mismo producto se pisaban entre si.
       //
-      // Ojo con este caso: una version anterior le puso a la segunda un titulo
-      // largo de tres lineas y las dos tarjetas terminaron midiendo lo mismo
-      // por casualidad, asi que la comprobacion pasaba sobre una grilla que en
-      // la tienda se veia torcida. Si se tocan estos datos hay que volver a
-      // mirar que los altos sigan siendo distintos.
-      return j({ ok: true, products: GUARDADOS.map(function (it, n) {
-        return { productId: it.productId,
-                 title: "Producto " + (n + 1),
-                 handle: "p" + (n + 1),
-                 url: "/products/p" + (n + 1), imagen: null, imagenAlt: "", precio: "1999.00",
-                 moneda: "ARS", disponible: n === 0,
-                 varianteTitulo: n === 0 ? "Talle M" : null,
-                 variantIdParaCarrito: n === 0 ? "900" + n : null };
+      // pre1 y pre2 son el mismo producto: uno guardado sin elegir variante y
+      // otro con "Negro / M" elegida. Los dos terminan apuntando a la MISMA
+      // variante vendible (9000), que es lo que hacia que "agregar todo"
+      // mandara dos veces lo mismo y el carrito quedara en cantidad 2.
+      //
+      // Las tarjetas son ademas desparejas en alto a proposito: pre2 suma la
+      // linea de variante y pre3 no tiene boton de carrito sino el cartel de
+      // agotado. Ojo al tocar estos datos: una version anterior las dejo del
+      // mismo alto por casualidad y la comprobacion de alineacion pasaba sobre
+      // una grilla que en la tienda se veia torcida.
+      var POR_ITEM = {
+        pre1: { title: "Producto 1", handle: "p1", disponible: true,
+                varianteTitulo: null, variantIdParaCarrito: "9000" },
+        pre2: { title: "Producto 1", handle: "p1", disponible: true,
+                varianteTitulo: "Negro / M", variantIdParaCarrito: "9000" },
+        pre3: { title: "Producto 2", handle: "p2", disponible: false,
+                varianteTitulo: null, variantIdParaCarrito: null }
+      };
+      return j({ ok: true, products: GUARDADOS.map(function (it) {
+        var d = POR_ITEM[it.id] || POR_ITEM.pre1;
+        return { clave: it.productId + "|" + (it.variantId || ""),
+                 productId: it.productId, variantId: it.variantId || null,
+                 title: d.title, handle: d.handle, url: "/products/" + d.handle,
+                 imagen: null, imagenAlt: "", precio: "1999.00", moneda: "ARS",
+                 disponible: d.disponible, varianteTitulo: d.varianteTitulo,
+                 variantIdParaCarrito: d.variantIdParaCarrito };
       }) });
     }
     if (u.indexOf("/apps/lovelist/merge") === 0) {
@@ -282,7 +345,31 @@ window.__resultado = null;
 
       ok("pinta la grilla con los productos del servidor", function () {
         var n = raiz.querySelectorAll(".lovelist-tarjeta").length;
-        return { cond: n === 2, extra: n }; });
+        return { cond: n === 3, extra: n }; });
+
+      ok("el mismo producto guardado dos veces son DOS tarjetas", function () {
+        var titulos = [].slice.call(raiz.querySelectorAll(".lovelist-tarjeta-titulo"))
+          .map(function (a) { return a.textContent; });
+        var repes = titulos.filter(function (t) { return t === "Producto 1"; });
+        return { cond: repes.length === 2, extra: titulos.join(" | ") }; });
+
+      ok("y se distinguen por la variante elegida", function () {
+        var tarjetas = [].slice.call(raiz.querySelectorAll(".lovelist-tarjeta"))
+          .filter(function (t) {
+            var a = t.querySelector(".lovelist-tarjeta-titulo");
+            return a && a.textContent === "Producto 1";
+          });
+        var conVariante = tarjetas.filter(function (t) {
+          var v = t.querySelector(".lovelist-tarjeta-variante");
+          return v && v.textContent.trim() === "Negro / M";
+        });
+        var sinVariante = tarjetas.filter(function (t) {
+          return !t.querySelector(".lovelist-tarjeta-variante");
+        });
+        // Una con el nombre de la variante y otra sin nada: el que no eligio
+        // variante no debe ver inventado el nombre de una que no eligio.
+        return { cond: conVariante.length === 1 && sinVariante.length === 1,
+                 extra: "con=" + conVariante.length + " sin=" + sinVariante.length }; });
       ok("usa titulo y enlace que vinieron del servidor", function () {
         var a = raiz.querySelector(".lovelist-tarjeta-titulo");
         return { cond: a && a.textContent === "Producto 1" && a.getAttribute("href") === "/products/p1",
@@ -304,6 +391,15 @@ window.__resultado = null;
         var b = raiz.querySelector("[data-lovelist-agregar-todo]");
         return { cond: b && b.getAttribute("data-lovelist-agregar-todo") === "9000", extra: b && b.getAttribute("data-lovelist-agregar-todo") }; });
 
+      ok("y la misma variante no entra dos veces", function () {
+        var b = raiz.querySelector("[data-lovelist-agregar-todo]");
+        var ids = b ? b.getAttribute("data-lovelist-agregar-todo").split(",") : [];
+        var unicos = ids.filter(function (x, i) { return ids.indexOf(x) === i; });
+        // pre1 y pre2 son dos favoritos distintos pero apuntan a la misma
+        // variante vendible: al carrito tiene que ir una sola vez.
+        return { cond: ids.length === unicos.length && ids.length === 1,
+                 extra: ids.join(",") }; });
+
       ok("todos los botones tienen etiqueta", function () {
         var mudos = botonesDe(raiz).filter(function (b) { return !etiquetaDe(b); });
         return { cond: botonesDe(raiz).length > 0 && mudos.length === 0,
@@ -319,13 +415,19 @@ window.__resultado = null;
 
       ok("el boton de carrito individual esta en cada tarjeta comprable", function () {
         var tarjetas = [].slice.call(raiz.querySelectorAll(".lovelist-tarjeta"));
+        var agotadas = tarjetas.filter(function (t) { return t.querySelector(".lovelist-agotado"); });
         var conBoton = tarjetas.filter(function (t) { return t.querySelector("[data-lovelist-al-carrito]"); });
         var visible = conBoton.every(function (t) {
           var b = t.querySelector("[data-lovelist-al-carrito]");
           return etiquetaDe(b) && contrasta(b) && b.getBoundingClientRect().width > 0;
         });
-        return { cond: conBoton.length === 1 && visible,
-                 extra: "tarjetas con boton=" + conBoton.length + " visibles=" + visible }; });
+        // Todas las comprables lo tienen y ninguna agotada lo tiene: el boton
+        // va por tarjeta, no por producto. Dos favoritos del mismo articulo
+        // tienen cada uno el suyo.
+        return { cond: conBoton.length === tarjetas.length - agotadas.length &&
+                       conBoton.length >= 2 && visible,
+                 extra: "tarjetas=" + tarjetas.length + " conBoton=" + conBoton.length +
+                        " agotadas=" + agotadas.length + " visibles=" + visible }; });
 
       // Se mide contra el fondo de cada tarjeta, no la posicion absoluta de los
       // botones. Comparar posiciones absolutas es fragil: dos tarjetas de
@@ -342,25 +444,70 @@ window.__resultado = null;
         });
         var desvio = Math.max.apply(null, margenes) - Math.min.apply(null, margenes);
 
-        // Guarda del propio caso de prueba: si las dos tarjetas dejaran de
-        // tener contenido distinto, alinear seria trivial y esto no probaria
-        // nada. La primera trae variante y boton; la segunda, el agotado.
-        var desparejas = !!tarjetas[0].querySelector(".lovelist-tarjeta-variante")
-          && !!tarjetas[0].querySelector("[data-lovelist-al-carrito]")
-          && !tarjetas[1].querySelector(".lovelist-tarjeta-variante")
-          && !!tarjetas[1].querySelector(".lovelist-agotado");
+        // Guarda del propio caso de prueba: si las tarjetas dejaran de tener
+        // contenido distinto, alinear seria trivial y esto no probaria nada.
+        // Tiene que haber al menos una con linea de variante, una sin ella, y
+        // una con el cartel de agotado en vez del boton.
+        var conVariante = tarjetas.filter(function (t) { return t.querySelector(".lovelist-tarjeta-variante"); });
+        var sinVariante = tarjetas.filter(function (t) { return !t.querySelector(".lovelist-tarjeta-variante"); });
+        var agotadas = tarjetas.filter(function (t) { return t.querySelector(".lovelist-agotado"); });
+        var desparejas = conVariante.length >= 1 && sinVariante.length >= 1 && agotadas.length >= 1;
 
         return { cond: desvio <= 1 && desparejas,
                  extra: desparejas
                    ? "margenes " + margenes.join(" / ") + " altos " + altos.join(" / ")
                    : "el caso dejo de ser desparejo: las tarjetas ya no difieren en contenido" }; });
 
+      var urlAntes = location.href;
       raiz.querySelector("[data-lovelist-al-carrito]").click();
-      await esperar(200);
+      await esperar(300);
+
       ok("agregar al carrito pega en /cart/add.js con la variante", function () {
         var c = PEDIDOS.filter(function (p) { return p.url.indexOf("/cart/add.js") === 0; });
         var b = c.length ? JSON.parse(c[0].body) : {};
         return { cond: c.length === 1 && b.items && b.items[0].id === 9000 && b.items[0].quantity === 1, extra: JSON.stringify(b) }; });
+
+      // --- Que NO se lleve al comprador puesto ---
+      //
+      // Antes esto mandaba a /cart. La mayoria de los temas de hoy usan un
+      // panel lateral, muchos merchants no tienen ni habilitada la pagina de
+      // carrito, y sacar a alguien de donde esta justo cuando decidio comprar
+      // es perder la venta.
+
+      ok("NO saca al comprador de la pagina", function () {
+        return { cond: location.href === urlAntes, extra: location.href }; });
+
+      if (!SIN_DRAWER) {
+        ok("le pregunta al tema que secciones renderizar", function () {
+          var c = PEDIDOS.filter(function (p) { return p.url.indexOf("/cart/add.js") === 0; });
+          var b = c.length ? JSON.parse(c[0].body) : {};
+          var pedidas = [].concat(b.sections || []).join(",");
+          // Las secciones salen de getSectionsToRender() del propio tema, no
+          // de una lista escrita a mano por nosotros.
+          return { cond: window.DRAWER.secciones > 0 && /cart-drawer/.test(pedidas),
+                   extra: "consultas=" + window.DRAWER.secciones + " pedidas=" + pedidas }; });
+
+        ok("y le entrega el resultado al panel del tema, que se abre", function () {
+          var r = window.DRAWER.render;
+          return { cond: r.length === 1 && window.DRAWER.abierto && r[0] && r[0].sections,
+                   extra: "render=" + r.length + " abierto=" + window.DRAWER.abierto }; });
+      } else {
+        ok("sin panel del tema, avisa en la pagina y no navega", function () {
+          var aviso = document.getElementById("lovelist-aviso");
+          var visible = aviso && aviso.classList.contains("lovelist-aviso-visible");
+          return { cond: !!visible && location.href === urlAntes,
+                   extra: "aviso=" + (aviso && aviso.textContent) }; });
+
+        ok("y el aviso ofrece ir al carrito", function () {
+          var aviso = document.getElementById("lovelist-aviso");
+          var a = aviso && aviso.querySelector('a[href="/cart"]');
+          return { cond: !!a && !!a.textContent.trim(), extra: aviso && aviso.innerHTML }; });
+
+        ok("avisa al tema por evento, por si escucha alguno", function () {
+          var nombres = window.EVENTOS.map(function (e) { return e.nombre; });
+          return { cond: nombres.indexOf("cart:update") >= 0 && nombres.indexOf("cart:refresh") >= 0,
+                   extra: nombres.join(", ") }; });
+      }
 
       raiz.querySelector("[data-lovelist-compartir-lista]").click();
       await esperar(400);
@@ -374,10 +521,12 @@ window.__resultado = null;
 
       raiz.querySelector("[data-lovelist-quitar-pagina]").click();
       await esperar(500);
-      ok("quitar saca la tarjeta y manda DELETE", function () {
+      ok("quitar saca UNA tarjeta y manda DELETE", function () {
         var d = PEDIDOS.filter(function (p) { return p.method === "DELETE"; });
-        return { cond: d.length === 1 && raiz.querySelectorAll(".lovelist-tarjeta").length === 1,
-                 extra: d.length + " / " + raiz.querySelectorAll(".lovelist-tarjeta").length }; });
+        var quedan = raiz.querySelectorAll(".lovelist-tarjeta").length;
+        // Quitar el favorito sin variante no puede llevarse puesto al que si
+        // la tiene: son dos items distintos del mismo producto.
+        return { cond: d.length === 1 && quedan === 2, extra: d.length + " / " + quedan }; });
 
       ok("cero errores de JS", function () {
         return { cond: window.__errores.length === 0, extra: JSON.stringify(window.__errores) }; });
