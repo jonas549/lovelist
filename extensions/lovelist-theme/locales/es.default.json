@@ -26,8 +26,6 @@
     "porEmail": "Email",
     "mensajeCompartir": "Mirá mi lista de favoritos:",
     "asuntoEmail": "Mi lista de favoritos",
-    "agregadoAlCarrito": "Agregado al carrito.",
-    "verCarrito": "Ver carrito",
     "errorCarrito": "No pudimos agregar al carrito. Intentá de nuevo.",
     "errorCompartir": "No pudimos generar el link. Intentá de nuevo."
   }

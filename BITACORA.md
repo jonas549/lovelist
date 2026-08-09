@@ -513,6 +513,52 @@ después de la lista de pruebas es mencionarlo tarde.
 
 ---
 
+### 4.10 `sections: null` — el App Proxy no renderiza secciones del tema
+
+**Cómo se manifestó.** Los productos entraban bien al carrito, con la variante
+y el precio correctos, pero el panel lateral de Dawn no se abría solo. Se caía
+al respaldo sin que nadie se enterara. Costó **tres entregas**.
+
+**Causa real.** `POST /cart/add.js` acepta un parámetro `sections_url` que dice
+en qué contexto renderizar las secciones pedidas. Se le mandaba
+`window.location.pathname`, que en la página de favoritos es `/apps/lovelist`
+—una ruta del App Proxy, que no es una plantilla del tema—. Shopify responde
+con la clave `sections` presente pero en **`null`**, Dawn hace
+`parsedState.sections['cart-drawer']` y tira `Cannot read properties of null`.
+
+Lo difícil de ver es que **el mismo pedido por otros caminos sí funciona sobre
+esa misma ruta**: un `GET /apps/lovelist?sections=...` devuelve el HTML, y
+`/cart/update.js` con ese `sections_url` también. Solo `add.js` falla ahí. Por
+eso las comprobaciones previas daban verde: probaban el mecanismo por caminos
+que no eran el que usa el código.
+
+Aislado con cuatro variantes del mismo pedido contra la tienda real:
+
+| `sections_url` | Resultado |
+|---|---|
+| `/apps/lovelist` | `sections: null` |
+| omitido (usa la página actual) | `sections: null` |
+| omitido, con `sections` como string | `sections: null` |
+| `/` | funciona |
+
+**Cómo se arregló.** `sections_url` fijo en `/`. Lo que muestra el panel
+depende del carrito, no de dónde estaba parado el comprador, así que la raíz
+sirve para todas las páginas y elimina la clase entera de casos borde.
+
+Además se dejó de atrapar el fallo en silencio: si las secciones no vinieron,
+se va a `/cart` en vez de mostrar un cartelito. Y se quitaron dos cosas que
+eran aproximaciones: el despacho de `cart:update`/`cart:refresh` por si algún
+tema escuchaba —no se podía verificar contra ningún tema disponible— y el
+aviso propio al pie, que era ilegible.
+
+**Lección.** Un `try/catch` que registra y sigue convierte un fallo ruidoso en
+uno invisible: el error estaba en la consola desde el primer día. Y cuando se
+integra con algo ajeno, hay que probar **el camino exacto que usa el código**,
+no un camino parecido; acá tres pruebas del mecanismo daban verde mientras la
+única llamada que importaba fallaba.
+
+---
+
 ### 4.9 Otros errores más chicos, con su lección
 
 **El `@@unique` con `NULL` no impedía duplicados.** En Postgres `NULL != NULL`,
@@ -848,7 +894,11 @@ por todos:
 | `/?logueado` | fusión al iniciar sesión |
 | `/?merge-falla` | la fusión falla: conserva el `anonymousId` y reintenta |
 | `/?pagina` | página completa: grilla, carrito, compartir, quitar |
-| `/?pagina&sin-drawer` | tema sin panel de carrito: avisa sin sacar al comprador |
+| `/?pagina&sin-drawer` | tema sin panel de carrito: tiene que terminar en `/cart` |
+| `/?pagina&secciones-nulas` | hay panel pero Shopify devuelve `sections: null`: también va a `/cart` |
+
+Los dos últimos **terminan navegando a propósito**: aterrizar en `/cart` es el
+resultado que se comprueba, y la página de destino la sirve el propio banco.
 
 Simula un header estilo Dawn con cinco enlaces al carrito, cinco formas de
 tarjeta de producto y un banner promocional. Esos casos están porque **cada uno

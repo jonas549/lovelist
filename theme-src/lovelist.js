@@ -372,22 +372,21 @@
    *
    * No hay una forma unificada de refrescar el panel del tema: Shopify lo
    * confirmó en su foro de desarrolladores y el drawer es del tema, no suyo.
-   * Así que se intenta en tres capas, de la más específica a la más general, y
-   * ninguna adivina selectores del tema:
+   * Así que hay exactamente dos caminos, los dos comprobados, ninguno a medias:
    *
-   *   1. Se le PREGUNTA al tema qué secciones renderizar, con el método
-   *      público `getSectionsToRender()` de su elemento <cart-drawer>, y se
-   *      piden en el mismo /cart/add.js. Es la misma llamada que hace el
-   *      formulario de producto de Dawn.
-   *   2. Se le entrega el resultado por su propio método público
-   *      `renderContents()`, que en Dawn actualiza el panel y lo abre solo.
-   *      Cubre Dawn y toda su familia.
-   *   3. Se despachan los eventos que escuchan los demás: `cart:update` para
-   *      Horizon 3+ y `cart:refresh` para varios otros. Si nadie escucha, no
-   *      pasa nada.
+   *   1. El tema expone un <cart-drawer> con `renderContents()`. Le
+   *      preguntamos qué secciones necesita con su `getSectionsToRender()`,
+   *      las pedimos en el mismo /cart/add.js y le entregamos el resultado.
+   *      En Dawn eso actualiza el panel y lo abre solo. Es la misma llamada
+   *      que hace el formulario de producto del propio Dawn.
+   *   2. Cualquier otra cosa: se va a /cart, que funciona en todos los temas.
    *
-   * Y si no hay panel, se avisa acá mismo con un enlace al carrito. El carrito
-   * queda bien igual; lo único que no pasa es que se abra un panel.
+   * Hubo una tercera capa que despachaba `cart:update` y `cart:refresh` por si
+   * algún tema escuchaba. Se quitó: no se podía verificar contra ningún tema
+   * que tengamos, y un tema que la atendiera a medias quedaría peor que
+   * redirigido. También se quitó un aviso propio al pie de la página: cuando
+   * no hay panel, un cartel de cuatro segundos abajo del todo no es una
+   * confirmación, es ruido.
    */
   function alCarrito(ids) {
     // Sin repetir: dos favoritos distintos del mismo producto pueden apuntar a
@@ -414,7 +413,20 @@
     var secciones = seccionesDelPanel(panel);
     if (secciones) {
       cuerpo.sections = secciones;
-      cuerpo.sections_url = window.location.pathname;
+      // El contexto de renderizado va fijo a la raíz y NO a la página actual.
+      //
+      // /cart/add.js devuelve `sections: null` cuando se le pide renderizar en
+      // el contexto de una URL del App Proxy, que es justo donde vive esta
+      // página (/apps/lovelist). Con secciones nulas, Dawn revienta al hacer
+      // parsedState.sections['cart-drawer'] y el panel nunca se abría.
+      //
+      // Cuesta verlo porque el mismo pedido por otros caminos SÍ funciona
+      // sobre esa ruta: un GET /apps/lovelist?sections=... devuelve el HTML, y
+      // /cart/update.js también. Solo add.js falla en ese contexto.
+      //
+      // La raíz sirve para todas las páginas: lo que muestra el panel depende
+      // del carrito, no de dónde estaba parado el comprador.
+      cuerpo.sections_url = "/";
     }
 
     fetch("/cart/add.js", {
@@ -429,12 +441,20 @@
       })
       .then(function (respuesta) {
         pintarContador();
-        avisarAlTema(items.length);
 
-        if (panel && typeof panel.renderContents === "function") {
-          // En Dawn esto actualiza el contenido y abre el panel solo, así que
-          // no hace falta ningún aviso nuestro: el comprador ve su carrito.
+        // Se exige que las secciones hayan venido de verdad. Sin esto el fallo
+        // quedaba escondido: Shopify respondía con `sections: null`, el tema
+        // tiraba una excepción que nosotros atrapábamos, y el comprador veía
+        // un cartelito en vez de su carrito. Un modo de fallo silencioso.
+        if (
+          panel &&
+          typeof panel.renderContents === "function" &&
+          respuesta &&
+          respuesta.sections
+        ) {
           try {
+            // En Dawn esto actualiza el panel y lo abre solo: el comprador ve
+            // su carrito sin salir de donde estaba.
             panel.renderContents(respuesta);
             return;
           } catch (e) {
@@ -442,7 +462,8 @@
           }
         }
 
-        avisarConEnlaceAlCarrito();
+        // Sin panel utilizable, al carrito. Funciona en todos los temas.
+        window.location.href = "/cart";
       })
       .catch(function (e) {
         registrar("no se pudo agregar al carrito", e);
@@ -481,38 +502,6 @@
     }
   }
 
-  /** Eventos de carrito que escuchan los temas que no son de la familia Dawn. */
-  function avisarAlTema(cantidad) {
-    try {
-      document.dispatchEvent(
-        new CustomEvent("cart:update", {
-          bubbles: true,
-          detail: { data: { source: "lovelist", itemCount: cantidad } },
-        }),
-      );
-      document.documentElement.dispatchEvent(
-        new CustomEvent("cart:refresh", { bubbles: true }),
-      );
-    } catch (e) {
-      // Un navegador sin CustomEvent no puede romper el agregado al carrito.
-      registrar("no se pudo avisar al tema", e);
-    }
-  }
-
-  /**
-   * Respaldo digno para un tema sin panel: confirmamos acá y ofrecemos ir al
-   * carrito, en vez de llevarlo a la fuerza.
-   */
-  function avisarConEnlaceAlCarrito() {
-    var caja = cajaDeAviso();
-    caja.textContent = T.agregadoAlCarrito + " ";
-    var a = document.createElement("a");
-    a.href = "/cart";
-    a.className = "lovelist-aviso-enlace";
-    a.textContent = T.verCarrito;
-    caja.appendChild(a);
-    mostrarAviso(caja);
-  }
 
   /**
    * Une lo que el visitante guardó como invitado con su cuenta, la primera vez
@@ -822,7 +811,8 @@
 
   var tiempoAviso;
 
-  function cajaDeAviso() {
+  function avisar(mensaje) {
+    if (!mensaje) return;
     var caja = document.getElementById("lovelist-aviso");
     if (!caja) {
       caja = document.createElement("div");
@@ -833,23 +823,12 @@
       caja.setAttribute("data-lovelist-ui", "");
       document.body.appendChild(caja);
     }
-    caja.textContent = "";
-    return caja;
-  }
-
-  function mostrarAviso(caja) {
+    caja.textContent = mensaje;
     caja.classList.add("lovelist-aviso-visible");
     clearTimeout(tiempoAviso);
     tiempoAviso = setTimeout(function () {
       caja.classList.remove("lovelist-aviso-visible");
     }, 4000);
-  }
-
-  function avisar(mensaje) {
-    if (!mensaje) return;
-    var caja = cajaDeAviso();
-    caja.textContent = mensaje;
-    mostrarAviso(caja);
   }
 
   // -------------------------------------------------------------------------

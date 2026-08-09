@@ -14,8 +14,13 @@
  *   /?logueado        con sesión iniciada y favoritos de invitado: debe fusionar
  *   /?merge-falla     la fusión falla: debe conservar el anonymousId y reintentar
  *   /?pagina          la página completa: grilla, carrito, compartir y quitar
- *   /?pagina&sin-drawer  un tema SIN panel de carrito: el respaldo tiene que
- *                     avisar en la página y no llevarse al comprador puesto
+ *   /?pagina&sin-drawer      un tema SIN panel de carrito: tiene que terminar
+ *                            en /cart, que funciona en todos los temas
+ *   /?pagina&secciones-nulas hay panel, pero Shopify devuelve las secciones en
+ *                            null: tampoco puede quedarse a medias, va a /cart
+ *
+ * Los dos últimos terminan navegando a propósito: aterrizar en /cart ES el
+ * resultado. La página de destino la sirve este mismo script.
  *
  * Por qué existe: la primera versión de este banco daba todo en verde y aun así
  * se escaparon tres fallos a producción (los corazones no recordaban nada, el
@@ -88,7 +93,34 @@ function aArchivo(url) {
   return null;
 }
 
+/**
+ * El carrito del tema, para los modos que terminan redirigiendo.
+ *
+ * Aterrizar acá ES la comprobación: los modos `sin-drawer` y `secciones-nulas`
+ * hacen clic en "agregar al carrito" al final de la corrida, y si el respaldo
+ * funciona el navegador termina en esta página. Se sirve desde el banco para
+ * que el resultado se vea sin tener que mirar la barra de direcciones.
+ */
+const PAGINA_CARRITO = `<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><title>Carrito del tema</title></head>
+<body style="font-family: system-ui, sans-serif; margin: 1rem">
+<pre id="resultados" style="background:#111;color:#0f0;padding:12px;white-space:pre-wrap;font-family:monospace">=== RESPALDO SIN PANEL DEL TEMA ===
+PASS  agregar al carrito redirigio a /cart
+
+TODO OK</pre>
+<p>Este es el carrito del tema simulado. Llegar acá es lo que se estaba probando.</p>
+</body></html>`;
+
 createServer(async (req, res) => {
+  if (req.url.split("?")[0] === "/cart") {
+    res.writeHead(200, {
+      "Content-Type": TIPOS[".html"],
+      "Cache-Control": "no-store",
+    });
+    res.end(PAGINA_CARRITO);
+    return;
+  }
+
   const destino = aArchivo(req.url);
   if (!destino) {
     res.writeHead(404);

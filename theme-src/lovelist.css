@@ -294,8 +294,7 @@
   color: #1a1a1a;
 }
 
-/* Aviso: errores, y la confirmacion de "agregado al carrito" cuando el tema
-   no tiene panel lateral que abrir. */
+/* Aviso de error */
 .lovelist-aviso {
   position: fixed;
   left: 50%;
@@ -318,14 +317,6 @@
   opacity: 1;
   visibility: visible;
   transform: translate(-50%, 0);
-}
-
-/* El aviso tiene fondo propio y oscuro, asi que aca el color no se hereda del
-   tema: seria ilegible sobre este fondo. Es la excepcion, no la regla. */
-.lovelist-aviso-enlace {
-  color: #fff;
-  text-decoration: underline;
-  white-space: nowrap;
 }
 
 @media (prefers-reduced-motion: reduce) {

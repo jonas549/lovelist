@@ -93,9 +93,15 @@
   var PAGINA = /[?&]pagina/.test(location.search);
   var LOGUEADO = /[?&]logueado/.test(location.search);
   var MERGE_FALLA = /[?&]merge-falla/.test(location.search);
-  // Tema sin cart drawer: hay que comprobar que el respaldo sea digno y que
-  // NO se vaya del sitio, que es justamente lo que se venia haciendo mal.
+  // Tema sin cart drawer: tiene que irse a /cart, que funciona siempre.
   var SIN_DRAWER = /[?&]sin-drawer/.test(location.search);
+  // Hay panel, pero Shopify devuelve `sections: null`. Es el fallo real que se
+  // nos escapo tres entregas: el tema tiraba una excepcion, la atrapabamos, y
+  // el comprador se quedaba sin panel y sin carrito. No puede pasar en
+  // silencio: si las secciones no vinieron, al carrito.
+  var SECCIONES_NULAS = /[?&]secciones-nulas/.test(location.search);
+  // Los dos modos de arriba terminan navegando, asi que el clic va al final.
+  var NAVEGA = SIN_DRAWER || SECCIONES_NULAS;
   var ANON_SEMBRADO = "11111111-2222-4333-8444-555555555555";
   if (LOGUEADO || MERGE_FALLA) {
     // Como si hubiera guardado cosas de invitado y recien ahora iniciara sesion.
@@ -148,15 +154,6 @@
       });
     }
 
-    // Eventos que escuchan los temas que no son de la familia Dawn.
-    window.EVENTOS = [];
-    document.addEventListener("cart:update", function (e) {
-      window.EVENTOS.push({ nombre: "cart:update", detalle: e.detail });
-    });
-    document.documentElement.addEventListener("cart:refresh", function () {
-      window.EVENTOS.push({ nombre: "cart:refresh" });
-    });
-
     // El armazon que manda el servidor en Liquid, tal cual.
     document.addEventListener("DOMContentLoaded", function () {}, false);
     document.write(
@@ -190,11 +187,17 @@
     // que despues del alta se refresca el panel del tema.
     if (u.indexOf("/cart/add.js") === 0) {
       var pedido = JSON.parse((init && init.body) || "{}");
+      // Shopify devuelve la clave `sections` en NULL cuando no puede
+      // renderizar en el contexto pedido —lo que pasa de verdad si
+      // sections_url apunta a una ruta del App Proxy—. Se simula tal cual,
+      // con la clave presente y el valor nulo, que es lo que engañaba.
       return j({
         items: (pedido.items || []).map(function (i) {
           return { id: i.id, quantity: i.quantity };
         }),
-        sections: { "cart-drawer": "<div>panel</div>", "cart-icon-bubble": "<span>3</span>" }
+        sections: SECCIONES_NULAS
+          ? null
+          : { "cart-drawer": "<div>panel</div>", "cart-icon-bubble": "<span>3</span>" }
       });
     }
 
@@ -459,25 +462,19 @@ window.__resultado = null;
                    : "el caso dejo de ser desparejo: las tarjetas ya no difieren en contenido" }; });
 
       var urlAntes = location.href;
-      raiz.querySelector("[data-lovelist-al-carrito]").click();
-      await esperar(300);
 
-      ok("agregar al carrito pega en /cart/add.js con la variante", function () {
-        var c = PEDIDOS.filter(function (p) { return p.url.indexOf("/cart/add.js") === 0; });
-        var b = c.length ? JSON.parse(c[0].body) : {};
-        return { cond: c.length === 1 && b.items && b.items[0].id === 9000 && b.items[0].quantity === 1, extra: JSON.stringify(b) }; });
+      // En los modos que terminan en /cart el clic va al FINAL de todo, porque
+      // la navegacion se lleva puesta la corrida. Aca solo se prueba el camino
+      // que se queda en la pagina.
+      if (!NAVEGA) {
+        raiz.querySelector("[data-lovelist-al-carrito]").click();
+        await esperar(300);
 
-      // --- Que NO se lleve al comprador puesto ---
-      //
-      // Antes esto mandaba a /cart. La mayoria de los temas de hoy usan un
-      // panel lateral, muchos merchants no tienen ni habilitada la pagina de
-      // carrito, y sacar a alguien de donde esta justo cuando decidio comprar
-      // es perder la venta.
+        ok("agregar al carrito pega en /cart/add.js con la variante", function () {
+          var c = PEDIDOS.filter(function (p) { return p.url.indexOf("/cart/add.js") === 0; });
+          var b = c.length ? JSON.parse(c[0].body) : {};
+          return { cond: c.length === 1 && b.items && b.items[0].id === 9000 && b.items[0].quantity === 1, extra: JSON.stringify(b) }; });
 
-      ok("NO saca al comprador de la pagina", function () {
-        return { cond: location.href === urlAntes, extra: location.href }; });
-
-      if (!SIN_DRAWER) {
         ok("le pregunta al tema que secciones renderizar", function () {
           var c = PEDIDOS.filter(function (p) { return p.url.indexOf("/cart/add.js") === 0; });
           var b = c.length ? JSON.parse(c[0].body) : {};
@@ -487,26 +484,22 @@ window.__resultado = null;
           return { cond: window.DRAWER.secciones > 0 && /cart-drawer/.test(pedidas),
                    extra: "consultas=" + window.DRAWER.secciones + " pedidas=" + pedidas }; });
 
-        ok("y le entrega el resultado al panel del tema, que se abre", function () {
+        // ESTA es la comprobacion que habria cazado el fallo de las tres
+        // entregas anteriores. Mandabamos la ruta actual, que en la pagina de
+        // favoritos es del App Proxy, y ahi Shopify no renderiza secciones:
+        // devolvia null y el panel nunca se abria.
+        ok("y las pide en el contexto de la raiz, no de la ruta del proxy", function () {
+          var c = PEDIDOS.filter(function (p) { return p.url.indexOf("/cart/add.js") === 0; });
+          var b = c.length ? JSON.parse(c[0].body) : {};
+          return { cond: b.sections_url === "/", extra: "sections_url=" + b.sections_url }; });
+
+        ok("le entrega el resultado al panel del tema, que se abre", function () {
           var r = window.DRAWER.render;
           return { cond: r.length === 1 && window.DRAWER.abierto && r[0] && r[0].sections,
                    extra: "render=" + r.length + " abierto=" + window.DRAWER.abierto }; });
-      } else {
-        ok("sin panel del tema, avisa en la pagina y no navega", function () {
-          var aviso = document.getElementById("lovelist-aviso");
-          var visible = aviso && aviso.classList.contains("lovelist-aviso-visible");
-          return { cond: !!visible && location.href === urlAntes,
-                   extra: "aviso=" + (aviso && aviso.textContent) }; });
 
-        ok("y el aviso ofrece ir al carrito", function () {
-          var aviso = document.getElementById("lovelist-aviso");
-          var a = aviso && aviso.querySelector('a[href="/cart"]');
-          return { cond: !!a && !!a.textContent.trim(), extra: aviso && aviso.innerHTML }; });
-
-        ok("avisa al tema por evento, por si escucha alguno", function () {
-          var nombres = window.EVENTOS.map(function (e) { return e.nombre; });
-          return { cond: nombres.indexOf("cart:update") >= 0 && nombres.indexOf("cart:refresh") >= 0,
-                   extra: nombres.join(", ") }; });
+        ok("y con panel NO saca al comprador de la pagina", function () {
+          return { cond: location.href === urlAntes, extra: location.href }; });
       }
 
       raiz.querySelector("[data-lovelist-compartir-lista]").click();
@@ -531,10 +524,25 @@ window.__resultado = null;
       ok("cero errores de JS", function () {
         return { cond: window.__errores.length === 0, extra: JSON.stringify(window.__errores) }; });
 
+      if (NAVEGA) {
+        out.push("");
+        out.push(SIN_DRAWER
+          ? "-> sin panel del tema: ahora tiene que irse a /cart"
+          : "-> el tema devolvio sections nulas: ahora tiene que irse a /cart");
+      }
+
       out.push("");
       out.push(fallos === 0 ? "TODO OK" : fallos + " FALLOS");
       document.getElementById("resultados").textContent = out.join("\n");
       window.__resultado = out.join("\n");
+
+      // Al final de todo: este clic navega y se lleva la corrida puesta. La
+      // comprobacion es aterrizar en /cart, y lo confirma la pagina de destino
+      // que sirve el propio banco.
+      if (NAVEGA) {
+        await esperar(150);
+        raiz.querySelector("[data-lovelist-al-carrito]").click();
+      }
       return;
     }
 
