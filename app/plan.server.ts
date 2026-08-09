@@ -1,0 +1,234 @@
+import type { Shop } from "@prisma/client";
+
+import prisma from "./db.server";
+import { unauthenticated } from "./shopify.server";
+
+/**
+ * Lectura del plan de la tienda.
+ *
+ * La app no crea suscripciones ni toca dinero: Shopify muestra la página de
+ * precios, cobra, y gestiona altas y bajas. Acá solo se LEE qué plan tiene
+ * cada tienda.
+ *
+ * Se usa la Admin API y no la Partner API. La documentación de Shopify App
+ * Pricing empuja hacia `activeSubscription(appId:, shopId:)` de la Partner
+ * API, pero esa pide una credencial de organización: un secreto más que
+ * guardar, rotar y proteger, que además no es por tienda. Para responder
+ * "¿esta tienda paga?" alcanza con el token que ya tenemos.
+ *
+ * **No hay webhooks de suscripción.** Shopify lo dice explícitamente, así que
+ * el sondeo no es una elección de diseño nuestra: es el único mecanismo que
+ * existe. Una cancelación se ve cuando preguntamos, no antes.
+ */
+
+/** El único plan pago. Va en minúsculas: es el handle, no el nombre. */
+export const HANDLE_PAGO = "pro";
+
+export const PLAN_PAGO = "PRO";
+export const PLAN_SIN_SUSCRIPCION = "FREE";
+
+/** Cada cuánto se le vuelve a preguntar a Shopify. */
+const TTL_MS = 5 * 60 * 1000;
+
+/**
+ * El resultado de preguntarle a Shopify, con los tres casos en el tipo.
+ *
+ * Que "no sé" y "no tiene" sean valores distintos y no un `string | null` es
+ * deliberado: confundirlos es el error que hace que una cancelación no se
+ * refleje nunca, o peor, que a alguien que está pagando se le corte el
+ * servicio por un error de red.
+ */
+export type LecturaDeSuscripcion =
+  | { estado: "confirmado"; handle: string | null }
+  | { estado: "desconocido"; motivo: string };
+
+const CONSULTA = `#graphql
+  query lovelistSuscripcion {
+    currentAppInstallation {
+      activeSubscriptions {
+        status
+        lineItems {
+          plan {
+            pricingDetails {
+              __typename
+              ... on AppRecurringPricing {
+                planHandle
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+type Suscripcion = {
+  status?: string;
+  lineItems?: { plan?: { pricingDetails?: { planHandle?: string } } }[];
+};
+
+/**
+ * Le pregunta a Shopify qué suscripción tiene la tienda.
+ *
+ * `activeSubscriptions` es PLURAL: el singular no existe en la API.
+ *
+ * Se lee `planHandle` y NO `name`. El nombre viene traducido al idioma de la
+ * tienda —"Standaard" en vez de "Standard"— y cualquier comparación contra él
+ * falla en tiendas que no estén en inglés. El handle no se traduce.
+ *
+ * `planHandle` existe desde la versión 2025-07 de la API. En versiones
+ * anteriores el campo no está y la respuesta vuelve sin él, sin decir por qué.
+ */
+export async function leerSuscripcion(
+  shopDominio: string,
+): Promise<LecturaDeSuscripcion> {
+  try {
+    const { admin } = await unauthenticated.admin(shopDominio);
+    const respuesta = await admin.graphql(CONSULTA);
+    const cuerpo = (await respuesta.json()) as {
+      data?: { currentAppInstallation?: { activeSubscriptions?: Suscripcion[] } };
+      errors?: unknown[];
+    };
+
+    // Con errores no sabemos nada, aunque venga `data`: una respuesta parcial
+    // podría traer la lista vacía por un fallo y no porque no haya suscripción.
+    if (cuerpo.errors?.length) {
+      return {
+        estado: "desconocido",
+        motivo: `la API respondió con errores: ${JSON.stringify(cuerpo.errors).slice(0, 300)}`,
+      };
+    }
+
+    const instalacion = cuerpo.data?.currentAppInstallation;
+    if (!instalacion) {
+      return { estado: "desconocido", motivo: "la respuesta no trajo currentAppInstallation" };
+    }
+
+    const activas = (instalacion.activeSubscriptions ?? []).filter(
+      (s) => s.status === "ACTIVE",
+    );
+
+    // Sin errores y sin suscripciones activas: esto NO es ambiguo. Es la
+    // confirmación de que la tienda no está pagando.
+    if (!activas.length) return { estado: "confirmado", handle: null };
+
+    for (const s of activas) {
+      for (const item of s.lineItems ?? []) {
+        const handle = item.plan?.pricingDetails?.planHandle;
+        if (handle) return { estado: "confirmado", handle };
+      }
+    }
+
+    // Hay suscripción activa pero no pudimos leerle el handle. No es "no
+    // tiene": es que no entendimos la respuesta.
+    return {
+      estado: "desconocido",
+      motivo: "hay una suscripción activa sin planHandle legible",
+    };
+  } catch (e) {
+    return {
+      estado: "desconocido",
+      motivo: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
+
+/**
+ * Deja `Shop.plan` al día, con la salvaguarda anti-degradación.
+ *
+ * Las reglas, en orden:
+ *
+ *  - confirmado con el handle pago  → se activa.
+ *  - confirmado sin suscripciones   → **se baja**. Es una respuesta sana con
+ *    lista vacía: confirmación, no ambigüedad. Sin esto, una cancelación no se
+ *    reflejaría nunca y el merchant conservaría el plan pagado para siempre.
+ *  - confirmado con un handle desconocido → **se conserva**. Puede ser un plan
+ *    nuevo que existe en el dashboard y que este código todavía no sabe leer.
+ *    Cortarle el servicio a alguien que paga es el peor error posible.
+ *  - desconocido (error de red, de API, respuesta rara) → **se conserva**.
+ *
+ * Nada de tragarse los fallos en silencio: los dos casos que conservan el plan
+ * dejan rastro. Un fallo silencioso en el sondeo convierte un error puntual en
+ * uno permanente que nadie ve.
+ */
+export async function sincronizarPlan(shop: Shop): Promise<Shop> {
+  const lectura = await leerSuscripcion(shop.domain);
+  const ahora = new Date();
+
+  if (lectura.estado === "desconocido") {
+    console.warn(
+      `[Lovelist] no se pudo leer la suscripción de ${shop.domain}, se conserva "${shop.plan}": ${lectura.motivo}`,
+    );
+    // No se toca `planRevisadoAt`: no llegamos a revisar nada, y marcarlo haría
+    // que no se reintentara hasta que venza el TTL.
+    return shop;
+  }
+
+  if (lectura.handle === null) {
+    if (shop.plan === PLAN_SIN_SUSCRIPCION) {
+      return prisma.shop.update({
+        where: { id: shop.id },
+        data: { planRevisadoAt: ahora },
+      });
+    }
+    console.info(
+      `[Lovelist] ${shop.domain} ya no tiene suscripción activa: baja de "${shop.plan}" a "${PLAN_SIN_SUSCRIPCION}"`,
+    );
+    return prisma.shop.update({
+      where: { id: shop.id },
+      data: {
+        plan: PLAN_SIN_SUSCRIPCION,
+        planActivatedAt: null,
+        planRevisadoAt: ahora,
+      },
+    });
+  }
+
+  if (lectura.handle !== HANDLE_PAGO) {
+    console.warn(
+      `[Lovelist] ${shop.domain} tiene el plan "${lectura.handle}", que este código no conoce. Se conserva "${shop.plan}".`,
+    );
+    return shop;
+  }
+
+  return prisma.shop.update({
+    where: { id: shop.id },
+    data: {
+      plan: PLAN_PAGO,
+      planActivatedAt: shop.planActivatedAt ?? ahora,
+      planRevisadoAt: ahora,
+    },
+  });
+}
+
+/** Sondea solo si la última lectura quedó vieja. */
+export async function sincronizarPlanSiHaceFalta(shop: Shop): Promise<Shop> {
+  const reciente =
+    shop.planRevisadoAt && Date.now() - shop.planRevisadoAt.getTime() < TTL_MS;
+  return reciente ? shop : sincronizarPlan(shop);
+}
+
+export function tienePlanActivo(shop: Pick<Shop, "plan"> | null): boolean {
+  return shop?.plan === PLAN_PAGO;
+}
+
+/**
+ * El handle de la app, para armar la URL de la página de precios de Shopify.
+ *
+ * Sin valor de reserva a propósito. Un valor inventado en el código produciría
+ * un enlace que lleva a una página que no existe, y el merchant no tendría
+ * forma de saber que el problema es de configuración nuestra. Si falta, la
+ * pantalla de planes lo dice.
+ */
+export function handleDeLaApp(): string | null {
+  // eslint-disable-next-line no-undef
+  const handle = process.env.SHOPIFY_APP_HANDLE?.trim();
+  return handle ? handle : null;
+}
+
+export function urlDePlanes(shopDominio: string): string | null {
+  const handle = handleDeLaApp();
+  if (!handle) return null;
+  const tienda = shopDominio.replace(/\.myshopify\.com$/, "");
+  return `https://admin.shopify.com/store/${tienda}/charges/${handle}/pricing_plans`;
+}

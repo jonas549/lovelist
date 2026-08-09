@@ -219,6 +219,8 @@
   // -------------------------------------------------------------------------
 
   var estado = {
+    /** Se apaga si el servidor avisa que la tienda no tiene suscripcion. */
+    activo: true,
     listas: [],
     items: [],
     cargado: false,
@@ -226,6 +228,38 @@
     productos: {},
     productosListos: false,
   };
+
+  /**
+   * Saca de la página todo lo que Lovelist puso.
+   *
+   * Se usa cuando la tienda no tiene suscripción activa. Los corazones se
+   * inyectan al iniciar y esta señal llega con la primera respuesta, así que
+   * en una tienda sin plan puede haber un parpadeo de unos milisegundos.
+   *
+   * Es a propósito. Evitarlo obligaría a esperar la respuesta antes de
+   * inyectar nada, y eso le agregaría retraso a TODAS las tiendas, incluidas
+   * las que pagan. El parpadeo lo tiene la tienda que no paga.
+   *
+   * Lo que puso el merchant en su tema —el bloque del botón de producto— no se
+   * toca: no es nuestro. Solo se le saca el corazón de adentro.
+   */
+  function retirarInterfaz() {
+    try {
+      todos("[data-lovelist-boton]").forEach(function (b) {
+        b.parentNode && b.parentNode.removeChild(b);
+      });
+      todos("[data-lovelist-ui]").forEach(function (e) {
+        e.parentNode && e.parentNode.removeChild(e);
+      });
+      contador = null;
+      if (paginaRaiz) {
+        var cuerpo = paginaRaiz.querySelector("[data-lovelist-pagina-cuerpo]");
+        if (cuerpo) cuerpo.innerHTML = "";
+      }
+    } catch (e) {
+      registrar("no se pudo retirar la interfaz", e);
+    }
+  }
 
   function reindexar() {
     estado.items = [];
@@ -262,6 +296,21 @@
       .then(function (r) {
         estado.listas = r.lists || [];
         estado.cargado = true;
+
+        // La tienda no tiene suscripcion activa: el servidor va a rechazar
+        // cualquier guardado, asi que se retira la interfaz en vez de dejar
+        // botones que fallan. Es la regla de este archivo: si algo no se
+        // puede hacer, se falla en silencio y no se le rompe la tienda a
+        // nadie.
+        //
+        // Las listas se recibieron igual y no se borra nada: si la tienda se
+        // resuscribe, vuelve todo entero.
+        if (r.activo === false) {
+          estado.activo = false;
+          retirarInterfaz();
+          return;
+        }
+
         reindexar();
         pintarTodo();
       })
@@ -1117,6 +1166,12 @@
   })();
 
   function escanear(raiz) {
+    // Sin suscripcion no se inyecta nada. Importa que este aca y no solo en
+    // `cargar`: el MutationObserver vuelve a escanear con cada cambio del DOM
+    // —carga infinita, filtros AJAX— y sin esta guarda repondria los corazones
+    // que se acaban de retirar.
+    if (estado.activo === false) return;
+
     var enlaces;
     try {
       enlaces = todos('a[href*="/products/"]', raiz);

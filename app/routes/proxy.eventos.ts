@@ -3,7 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import {
   ErrorApi,
   autenticarProxy,
-  consumirEscritura,
+  autorizarEscritura,
   json,
   manejar,
   obtenerOCrearShop,
@@ -40,7 +40,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
     if (!variantes.length) return json({ ok: true, registrados: 0 });
 
     const shop = await obtenerOCrearShop(shopDominio);
-    await consumirEscritura(shop.id, identidad);
+    await autorizarEscritura(shop, identidad);
 
     const registrados = await registrarAgregadoAlCarrito(shop.id, variantes);
     return json({ ok: true, registrados }, 201);

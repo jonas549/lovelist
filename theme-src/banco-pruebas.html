@@ -141,6 +141,10 @@
   var NAVEGA = SIN_DRAWER || SECCIONES_NULAS;
   // Configuracion del merchant cambiada desde el app embed.
   var CONFIG_ALT = /[?&]config-alt/.test(location.search);
+  // La tienda no tiene suscripcion activa: el servidor rechaza las escrituras
+  // y avisa con `activo: false`. El storefront tiene que retirarse entero, no
+  // dejar botones que van a fallar.
+  var SIN_PLAN = /[?&]sin-plan/.test(location.search);
   var ANON_SEMBRADO = "11111111-2222-4333-8444-555555555555";
   if (LOGUEADO || MERGE_FALLA) {
     // Como si hubiera guardado cosas de invitado y recien ahora iniciara sesion.
@@ -243,7 +247,10 @@
                  list: { id: "l1", name: "Favoritos", shareToken: "tok" + "x".repeat(30) } });
     }
     if (u.indexOf("/apps/lovelist/lists") === 0) {
-      return j({ ok: true, lists: GUARDADOS.length
+      // Las listas se devuelven IGUAL aunque la tienda no tenga plan: no se
+      // borra nada, y vuelven enteras si se resuscribe. Lo unico que cambia
+      // es `activo`.
+      return j({ ok: true, activo: !SIN_PLAN, lists: GUARDADOS.length
         ? [{ id: "l1", name: "Favoritos", isDefault: true, shareToken: null, shareUrl: null,
              itemCount: GUARDADOS.length, items: GUARDADOS.slice() }] : [] });
     }
@@ -810,6 +817,45 @@ window.__resultado = null;
         return { cond: pedidosProducto().length === 0, extra: JSON.stringify(pedidosProducto().map(function (p) { return p.url; })) }; });
       ok("los corazones quedan vacios", function () {
         return [].every.call(document.querySelectorAll("[data-lovelist-boton]"), function (b) { return b.getAttribute("aria-pressed") === "false"; }); });
+      out.push("");
+      out.push(fallos === 0 ? "TODO OK" : fallos + " FALLOS");
+      document.getElementById("resultados").textContent = out.join("\n");
+      window.__resultado = out.join("\n");
+      return;
+    }
+
+    if (SIN_PLAN) {
+      // La tienda no paga. El servidor rechaza cualquier escritura, asi que
+      // dejar botones en pantalla seria ofrecer algo que va a fallar. La regla
+      // de este archivo es fallar en silencio y no romperle la tienda a nadie.
+      out.push("=== TIENDA SIN SUSCRIPCION ACTIVA ===");
+
+      ok("no queda ni un corazon en la pagina", function () {
+        var n = document.querySelectorAll("[data-lovelist-boton]").length;
+        return { cond: n === 0, extra: n + " corazones" }; });
+
+      ok("no queda el contador ni ninguna pieza nuestra", function () {
+        var n = document.querySelectorAll("[data-lovelist-ui]").length;
+        return { cond: n === 0, extra: n + " piezas" }; });
+
+      // Lo que mas importa: NO se borro nada. El servidor devolvio las listas
+      // igual y el comprador las recupera enteras si la tienda se resuscribe.
+      ok("las listas se consultaron igual: no se borro nada", function () {
+        var consultas = PEDIDOS.filter(function (p) {
+          return p.url.indexOf("/apps/lovelist/lists") === 0;
+        });
+        return { cond: consultas.length >= 1, extra: consultas.length + " consultas" }; });
+
+      ok("no se intento ninguna escritura", function () {
+        var escrituras = PEDIDOS.filter(function (p) {
+          return p.url.indexOf("/apps/lovelist") === 0 && p.method !== "GET";
+        });
+        return { cond: escrituras.length === 0,
+                 extra: escrituras.map(function (p) { return p.method + " " + p.url; }).join(" | ") }; });
+
+      ok("cero errores de JS", function () {
+        return { cond: window.__errores.length === 0, extra: JSON.stringify(window.__errores) }; });
+
       out.push("");
       out.push(fallos === 0 ? "TODO OK" : fallos + " FALLOS");
       document.getElementById("resultados").textContent = out.join("\n");

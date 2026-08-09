@@ -3,7 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import {
   ErrorApi,
   autenticarProxy,
-  consumirEscritura,
+  autorizarEscritura,
   json,
   manejar,
   obtenerOCrearShop,
@@ -40,7 +40,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
     }
 
     const shop = await obtenerOCrearShop(shopDominio);
-    await consumirEscritura(shop.id, identidad);
+    await autorizarEscritura(shop, identidad);
 
     const resultado = await fusionarInvitado(
       shop.id,

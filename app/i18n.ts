@@ -55,6 +55,7 @@ export const es = {
   nav: {
     inicio: "Inicio",
     configuracion: "Configuración",
+    plan: "Plan",
     soporte: "Soporte",
     // Corto a propósito: va en la miga de pan del admin, que tiene poco
     // espacio y trunca. "Volver al inicio" salía cortado como "Volver a…".
@@ -89,6 +90,44 @@ export const es = {
     botonProducto: "Botón de la página de producto",
     botonProductoAyuda:
       "Usa la misma configuración: se agrega una sola vez y hereda el ícono, los colores y los textos.",
+  },
+  /** Pantalla de planes y cobro. */
+  planes: {
+    titulo: "Plan",
+    heroTitulo: "Activa Lovelist en tu tienda",
+    heroTexto:
+      "Listas de favoritos para tus compradores: corazones en colecciones y fichas, panel lateral, página de favoritos y listas que se pueden compartir.",
+    precio: "US$ 29 por mes",
+    precioAyuda:
+      "Se cobra junto con tu factura de Shopify. Puedes cancelar cuando quieras desde tu panel de Shopify.",
+    elegir: "Elegir plan",
+    queIncluye: "Qué incluye",
+    inc1: "Corazones en páginas de colección y en la ficha de producto.",
+    inc2: "Panel lateral y página de favoritos con el diseño de tu tema.",
+    inc3: "Favoritos para quien no tiene cuenta, que se conservan al registrarse.",
+    inc4: "Listas que se comparten por enlace, WhatsApp o email.",
+    inc5: "Panel con los productos más deseados de tu tienda.",
+
+    activoTitulo: "Tu plan está activo",
+    activoTexto: "Lovelist está funcionando en tu tienda.",
+    gestionar: "Gestionar el plan en Shopify",
+
+    // Se ve cuando la tienda tuvo plan y ya no lo tiene.
+    sinPlanTitulo: "Lovelist está en pausa",
+    sinPlanTexto:
+      "Los favoritos que tus compradores ya habían guardado siguen guardados y vuelven a estar disponibles apenas actives el plan. No se borra nada.",
+
+    faltaHandle:
+      "Falta configurar la app para poder mostrar los planes. Escribinos a {correo} y lo resolvemos.",
+
+    confirmandoTitulo: "Confirmando tu plan",
+    confirmadoTitulo: "¡Listo! Tu plan está activo",
+    confirmadoTexto: "Ya puedes usar Lovelist en tu tienda.",
+    confirmadoIr: "Ir al inicio",
+    noConfirmadoTitulo: "Todavía no vemos tu suscripción",
+    noConfirmadoTexto:
+      "Si acabas de suscribirte, puede tardar unos segundos en registrarse. Vuelve a comprobar; si sigue igual, escribinos.",
+    reintentar: "Volver a comprobar",
   },
   /** Pantalla de soporte. */
   soporte: {
@@ -190,6 +229,10 @@ export const es = {
     demasiadasEscrituras:
       "Estás haciendo demasiados cambios muy rápido. Esperá un momento.",
     firmaInvalida: "No pudimos validar la solicitud.",
+    // Lo ve el comprador, no el merchant: no puede decir "la tienda no pagó".
+    // El storefront además esconde los corazones cuando llega esta señal, así
+    // que este mensaje es la última red y casi nunca se ve.
+    sinPlanActivo: "Los favoritos no están disponibles en este momento.",
     errorInterno: "Algo salió mal. Intentá de nuevo.",
   },
 } as const;

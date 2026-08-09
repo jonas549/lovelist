@@ -3,7 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import {
   ErrorApi,
   autenticarProxy,
-  consumirEscritura,
+  autorizarEscritura,
   json,
   manejar,
   obtenerOCrearShop,
@@ -31,7 +31,7 @@ export const action = ({ request }: ActionFunctionArgs) =>
     if (metodo !== "POST") throw new ErrorApi(405, "metodoNoPermitido");
 
     const shop = await obtenerOCrearShop(shopDominio);
-    await consumirEscritura(shop.id, identidad);
+    await autorizarEscritura(shop, identidad);
 
     const { lista, item, creado } = await agregarItem(
       shop.id,

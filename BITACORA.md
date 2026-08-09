@@ -967,6 +967,50 @@ principio:
   refleja nunca.
 - **Nada de `catch` que solo hace `console.error`.**
 
+### Decisión consciente: el parpadeo lo tiene la tienda que no paga
+
+Sin suscripción activa, el storefront **retira** los corazones, el contador y
+el panel. Pero los corazones se inyectan al iniciar y la señal `activo: false`
+llega con la primera respuesta de `/proxy/lists`, así que en una tienda sin
+plan puede haber un parpadeo de unos milisegundos antes de que desaparezcan.
+
+**Se eligió así.** Evitarlo obligaría a esperar la respuesta antes de inyectar
+nada, y eso le agregaría retraso a **todas** las tiendas, incluidas las que
+pagan. El parpadeo lo tiene la que no paga.
+
+El control que de verdad cuenta no es visual: es el 402 del servidor, que pasa
+por `autorizarEscritura` y no se puede esquivar desde el navegador.
+
+---
+
+### Por qué la Admin API y no la Partner API para leer el plan
+
+La documentación de Shopify App Pricing empuja hacia
+`activeSubscription(appId:, shopId:)` de la **Partner API**. No se usa.
+
+Esa API pide una credencial de organización: un secreto más que guardar, rotar
+y proteger, que además no es por tienda. Para responder "¿esta tienda paga?"
+alcanza con `currentAppInstallation.activeSubscriptions` de la Admin API, con
+el token offline que ya tenemos.
+
+**Dos detalles que cuestan encontrar:**
+
+- El handle no está donde uno lo busca. Vive en
+  `activeSubscriptions → lineItems → plan → pricingDetails → ... on
+  AppRecurringPricing → planHandle`.
+- **Requiere la versión 2025-07 de la API o posterior.** En versiones
+  anteriores el campo no existe y la respuesta vuelve sin él, sin decir por
+  qué. Estamos en `July26`.
+
+Y lo de siempre: se lee `planHandle`, **nunca `name`**. El nombre viene
+traducido al idioma de la tienda y cualquier comparación contra él falla en
+tiendas que no estén en inglés.
+
+**No hay webhooks de suscripción.** Shopify lo dice explícitamente, así que el
+sondeo no es una elección de diseño: es el único mecanismo que existe.
+
+---
+
 ### Limitación conocida: no todos los textos son editables
 
 **Doce de los treinta y un textos del storefront no se pueden cambiar desde el

@@ -3,7 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import {
   ErrorApi,
   autenticarProxy,
-  consumirEscritura,
+  autorizarEscritura,
   json,
   manejar,
   obtenerOCrearShop,
@@ -27,7 +27,7 @@ export const action = ({ request, params }: ActionFunctionArgs) =>
     if (metodo !== "POST") throw new ErrorApi(405, "metodoNoPermitido");
 
     const shop = await obtenerOCrearShop(shopDominio);
-    await consumirEscritura(shop.id, identidad);
+    await autorizarEscritura(shop, identidad);
 
     const lista = await compartirLista(shop.id, identidad, params.id);
     const serializada = serializarLista(lista, shopDominio);

@@ -3,7 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import {
   ErrorApi,
   autenticarProxy,
-  consumirEscritura,
+  autorizarEscritura,
   json,
   manejar,
   obtenerOCrearShop,
@@ -27,7 +27,7 @@ export const action = ({ request, params }: ActionFunctionArgs) =>
     if (metodo !== "DELETE") throw new ErrorApi(405, "metodoNoPermitido");
 
     const shop = await obtenerOCrearShop(shopDominio);
-    await consumirEscritura(shop.id, identidad);
+    await autorizarEscritura(shop, identidad);
 
     const { itemId, listId } = await quitarItem(shop.id, identidad, params.id);
     return json({ ok: true, deletedItemId: itemId, listId });

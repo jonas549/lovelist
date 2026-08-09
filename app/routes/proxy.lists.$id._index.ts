@@ -3,7 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import {
   ErrorApi,
   autenticarProxy,
-  consumirEscritura,
+  autorizarEscritura,
   json,
   manejar,
   obtenerOCrearShop,
@@ -29,7 +29,7 @@ export const action = ({ request, params }: ActionFunctionArgs) =>
       await autenticarProxy(request);
 
     const shop = await obtenerOCrearShop(shopDominio);
-    await consumirEscritura(shop.id, identidad);
+    await autorizarEscritura(shop, identidad);
 
     if (metodo === "PATCH" || metodo === "PUT") {
       const lista = await renombrarLista(

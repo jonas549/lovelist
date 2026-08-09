@@ -39,8 +39,14 @@ model Shop {
   id              String    @id @default(cuid())
   domain          String    @unique
   currency        String?
+  /// "PRO" si Shopify confirma una suscripción activa; "FREE" si confirma que
+  /// no hay ninguna. Nunca se escribe a partir de una respuesta ambigua.
   plan            String    @default("FREE")
   planActivatedAt DateTime?
+  /// Última vez que le preguntamos a Shopify por la suscripción. No hay
+  /// webhooks de suscripción —Shopify lo dice explícitamente—, así que el
+  /// sondeo es el único mecanismo y esto es lo que evita sondear de más.
+  planRevisadoAt  DateTime?
   lastSyncAt      DateTime?
   settings        Json?
   /// Última vez que el storefront de esta tienda nos habló.

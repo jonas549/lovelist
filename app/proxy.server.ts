@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 
 import prisma from "./db.server";
+import { tienePlanActivo } from "./plan.server";
 import { t } from "./i18n";
 
 /**
@@ -381,7 +382,28 @@ async function limpiarVentanasVencidas(): Promise<void> {
   }
 }
 
-export async function consumirEscritura(
+/**
+ * Puerta única de todas las escrituras del storefront.
+ *
+ * Primero el paywall y después el tope de escrituras. Van juntos a propósito:
+ * si el control del plan viviera suelto en cada ruta, agregar una ruta nueva y
+ * olvidarse de llamarlo sería un agujero silencioso en el cobro. Acá no hay
+ * forma de escribir sin pasar por los dos.
+ *
+ * Solo bloquea ESCRITURAS. Las lecturas siguen funcionando sin plan: el
+ * comprador ve los favoritos que ya tenía y la página sigue en pie. Castigar
+ * al comprador por algo del merchant sería peor, y los datos quedan intactos
+ * para cuando la tienda vuelva a suscribirse.
+ */
+export async function autorizarEscritura(
+  shop: { id: string; plan: string },
+  identidad: Identidad,
+): Promise<void> {
+  if (!tienePlanActivo(shop)) throw new ErrorApi(402, "sinPlanActivo");
+  await consumirEscritura(shop.id, identidad);
+}
+
+async function consumirEscritura(
   shopId: string,
   identidad: Identidad,
 ): Promise<void> {
