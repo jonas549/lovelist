@@ -559,6 +559,66 @@ no un camino parecido; acá tres pruebas del mecanismo daban verde mientras la
 
 ---
 
+### 4.11 El panel se abría vacío, y la prueba corrió sobre un estado sucio
+
+**Cómo se manifestó.** Arreglado lo de 4.10, el panel del tema por fin se abría
+solo… pero llegaba vacío. Se veía el subtotal correcto y el botón "Ver carrito",
+y todo el resto en blanco. En `/cart` los productos sí estaban.
+
+**Causa real.** El contenido llegaba bien. Lo escondía el CSS.
+
+La respuesta de Shopify traía la sección completa, con su fila de producto, y
+esa fila **entraba al DOM en vivo**. Pero el elemento `<cart-drawer>` conservaba
+la clase `is-empty` de cuando la página se había cargado con el carrito vacío, y
+Dawn tiene estas reglas:
+
+```css
+cart-drawer.is-empty .drawer__header { display: none; }
+.is-empty .cart__contents            { display: none; }
+```
+
+Esconden el encabezado y los productos, **y no tocan el pie**: por eso se veía el
+subtotal y nada más. La clase vive en el **host**, por fuera de `#CartDrawer`,
+que es lo único que `renderContents` reemplaza. Nunca se limpiaba.
+
+`cart-drawer.js` intenta quitarla de `.drawer__inner` —el elemento equivocado en
+esta versión del tema—, así que dentro del panel esa limpieza no ocurre nunca.
+
+**Por qué el botón del propio Dawn sí funciona.** Se probó: con el carrito
+vacío, el "Add to cart" del tema llena el panel bien. La diferencia está en
+`product-form.js`:
+
+```js
+this.cart && this.cart.classList.contains("is-empty") && this.cart.classList.remove("is-empty")
+```
+
+**Quien limpia la clase es el llamador, no `renderContents`.** Nosotros
+llamábamos a `renderContents` y nos salteábamos la otra mitad del contrato.
+
+**Cómo se arregló.** Esa misma línea antes de renderizar. No es adivinar un
+selector interno: es completar el contrato que el propio tema implementa en su
+flujo de agregar al carrito. En un tema que no use esa clase, quitar algo que no
+está no hace nada.
+
+**La lección, y es la más cara de la sesión.** El fallo **solo aparece si el
+carrito estaba vacío al cargar la página**. Cuando se verificó el arreglo
+anterior, la prueba corrió con productos que las pruebas previas habían dejado
+en el carrito, así que el host no tenía `is-empty` y el panel se llenó perfecto.
+
+> **Verificar desde el estado inicial limpio, no desde el que dejó la prueba
+> anterior.** Una prueba que corre sobre su propia basura confirma el camino que
+> ya funcionaba y deja pasar justo el que importa.
+
+Y acá el estado sucio escondía el peor caso posible: el carrito vacío es la
+situación normal del comprador que agrega su primer producto.
+
+El banco tampoco podía cazarlo, por lo mismo: el doble del `cart-drawer` no
+modelaba `is-empty` ni el CSS que la usa. Ahora arranca con la clase puesta y la
+comprobación mira **lo que ve el comprador** —que el producto tenga alto en
+pantalla— y no que el atributo se haya quitado.
+
+---
+
 ### 4.9 Otros errores más chicos, con su lección
 
 **El `@@unique` con `NULL` no impedía duplicados.** En Postgres `NULL != NULL`,
@@ -858,6 +918,18 @@ dónde probar.
   pasaban, **la primera pregunta es por qué las pruebas estaban ciegas**, y hay
   que agregar el caso antes de arreglar. Jonas lo pidió explícitamente y tenía
   razón.
+- **Verificar desde el estado inicial limpio, no desde el que dejó la prueba
+  anterior.** Es la regla que más cara salió (ver 4.11): el panel del carrito se
+  dio por bueno porque la verificación corrió con productos que las pruebas
+  previas habían dejado en el carrito, y eso ocultaba el caso más común de
+  todos, el comprador que agrega su primero. Antes de dar algo por bueno, dejar
+  el estado como lo encuentra un visitante que llega por primera vez.
+- **Cuando se integra con algo ajeno, probar el camino exacto que usa el
+  código**, no uno equivalente. En 4.10 tres pruebas del mecanismo daban verde
+  mientras la única llamada que importaba fallaba.
+- **Un `catch` que registra y sigue convierte un fallo ruidoso en uno
+  invisible.** Si no se puede seguir de verdad, hay que caer al camino que
+  funciona siempre, no a uno peor.
 
 ### Qué quiere que le digan y no que se resuelva solo
 

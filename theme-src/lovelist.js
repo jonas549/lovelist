@@ -453,6 +453,31 @@
           respuesta.sections
         ) {
           try {
+            // La otra mitad del contrato del llamador, que nos faltaba.
+            //
+            // Si la página se cargó con el carrito vacío —el caso más común:
+            // el comprador agrega su primer producto—, el <cart-drawer> del
+            // tema arrastra la clase `is-empty`, y en Dawn eso esconde por CSS
+            // el encabezado y la lista de productos:
+            //
+            //   cart-drawer.is-empty .drawer__header { display: none }
+            //   .is-empty .cart__contents            { display: none }
+            //
+            // La clase vive en el HOST, por fuera de #CartDrawer, así que
+            // `renderContents` reemplaza el contenido y nunca la limpia: los
+            // productos entran al DOM y quedan invisibles. El panel se abría en
+            // blanco, con el subtotal correcto abajo —ese no lo esconde ninguna
+            // regla— y todo lo demás vacío.
+            //
+            // Quien la quita en Dawn es el LLAMADOR, no renderContents: su
+            // product-form.js hace exactamente esta línea antes de renderizar.
+            // No es adivinar un selector interno: es completar el contrato que
+            // el propio tema implementa. En un tema que no use esa clase,
+            // quitar algo que no está no hace nada.
+            if (panel.classList.contains("is-empty")) {
+              panel.classList.remove("is-empty");
+            }
+
             // En Dawn esto actualiza el panel y lo abre solo: el comprador ve
             // su carrito sin salir de donde estaba.
             panel.renderContents(respuesta);

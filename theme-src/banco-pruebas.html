@@ -12,6 +12,12 @@
   #resultados { background: #111; color: #0f0; padding: 12px; white-space: pre-wrap; font-family: monospace; }
   /* Dawn: el drawer movil vive plegado dentro de un <details> sin open */
   .menu-drawer { visibility: hidden; }
+  /* Dawn de verdad: mientras el panel tenga is-empty, el contenido esta
+     escondido por CSS. La clase queda pegada de cuando la pagina cargo con el
+     carrito vacio, y vive en el host, FUERA de lo que renderContents
+     reemplaza. Sin quitarla el panel se abre en blanco. */
+  cart-drawer { display: block; }
+  cart-drawer.is-empty .cart__contents { display: none; }
   #banner { border: 2px dashed #c00; padding: 12px; margin: 12px 0; }
 </style>
 </head>
@@ -137,19 +143,37 @@
     // Doble del <cart-drawer> de Dawn. Expone la MISMA superficie publica que
     // el elemento real: getSectionsToRender() para que le preguntemos que
     // secciones pedir, y renderContents(), que en Dawn actualiza el contenido
-    // y abre el panel solo. No imitamos su HTML interno a proposito: si algun
-    // dia dependemos de su marcado, este doble deja de avisarnos.
+    // y abre el panel solo.
+    //
+    // Arranca con `is-empty`, como el Dawn real cuando la pagina se carga con
+    // el carrito vacio —el caso mas comun: el comprador agrega su primero—, y
+    // mete el HTML de la seccion dentro de #CartDrawer, igual que Dawn.
+    //
+    // Eso importa: la clase vive en el HOST, por FUERA de #CartDrawer, asi que
+    // reemplazar el contenido no la limpia. Si nadie la quita, el panel se abre
+    // vacio aunque los productos esten en el DOM. La primera version de este
+    // doble no modelaba nada de esto y por eso dio verde sobre un panel que en
+    // la tienda salia en blanco.
     if (!SIN_DRAWER) {
       window.DRAWER = { secciones: 0, render: [], abierto: false };
       document.write("<cart-drawer></cart-drawer>");
       customElements.define("cart-drawer", class extends HTMLElement {
+        connectedCallback() {
+          this.className = "drawer is-empty";
+          this.innerHTML = '<div id="CartDrawer"><div class="cart__contents"></div></div>';
+        }
         getSectionsToRender() {
           window.DRAWER.secciones++;
-          return [{ id: "cart-drawer" }, { id: "cart-icon-bubble" }];
+          return [{ id: "cart-drawer", selector: "#CartDrawer" }, { id: "cart-icon-bubble" }];
         }
         renderContents(estado) {
           window.DRAWER.render.push(estado);
+          var destino = this.querySelector("#CartDrawer");
+          if (destino && estado && estado.sections) {
+            destino.innerHTML = estado.sections["cart-drawer"];
+          }
           window.DRAWER.abierto = true;
+          this.classList.add("active");
         }
       });
     }
@@ -197,7 +221,8 @@
         }),
         sections: SECCIONES_NULAS
           ? null
-          : { "cart-drawer": "<div>panel</div>", "cart-icon-bubble": "<span>3</span>" }
+          : { "cart-drawer": '<div class="cart__contents"><div class="cart-item">Producto en el carrito</div></div>',
+              "cart-icon-bubble": "<span>3</span>" }
       });
     }
 
@@ -497,6 +522,22 @@ window.__resultado = null;
           var r = window.DRAWER.render;
           return { cond: r.length === 1 && window.DRAWER.abierto && r[0] && r[0].sections,
                    extra: "render=" + r.length + " abierto=" + window.DRAWER.abierto }; });
+
+        // El panel se abria pero LLEGABA VACIO: los productos entraban al DOM
+        // y quedaban escondidos por el `is-empty` que arrastraba el host desde
+        // que la pagina cargo con el carrito vacio. Se comprueba lo que ve el
+        // comprador —que el producto tenga alto en pantalla— y no que la clase
+        // se haya quitado: el sintoma es la pantalla, no el atributo.
+        ok("y el panel se ve CON los productos adentro, no vacio", function () {
+          var panel = document.querySelector("cart-drawer");
+          var item = panel && panel.querySelector(".cart-item");
+          if (!item) return { cond: false, extra: "el producto ni siquiera llego al DOM del panel" };
+          var alto = item.getBoundingClientRect().height;
+          var oculto = getComputedStyle(item).display === "none" || alto === 0;
+          return { cond: !oculto,
+                   extra: oculto
+                     ? "el producto esta en el DOM pero no se ve (host: " + panel.className + ")"
+                     : "alto=" + Math.round(alto) }; });
 
         ok("y con panel NO saca al comprador de la pagina", function () {
           return { cond: location.href === urlAntes, extra: location.href }; });
