@@ -148,10 +148,23 @@
     if (u.indexOf("/cart/add.js") === 0) return new Promise(function () {});
 
     if (u.indexOf("/apps/lovelist/products") === 0) {
+      // Las dos tarjetas son deliberadamente desparejas EN ALTO: la primera
+      // suma una linea de variante y un boton de carrito; la segunda tiene
+      // titulo corto, sin variante, y el cartel de agotado. Esa diferencia es
+      // la que hacia que "Quitar" quedara a distinta altura en cada una.
+      //
+      // Ojo con este caso: una version anterior le puso a la segunda un titulo
+      // largo de tres lineas y las dos tarjetas terminaron midiendo lo mismo
+      // por casualidad, asi que la comprobacion pasaba sobre una grilla que en
+      // la tienda se veia torcida. Si se tocan estos datos hay que volver a
+      // mirar que los altos sigan siendo distintos.
       return j({ ok: true, products: GUARDADOS.map(function (it, n) {
-        return { productId: it.productId, title: "Producto " + (n + 1), handle: "p" + (n + 1),
+        return { productId: it.productId,
+                 title: "Producto " + (n + 1),
+                 handle: "p" + (n + 1),
                  url: "/products/p" + (n + 1), imagen: null, imagenAlt: "", precio: "1999.00",
-                 moneda: "ARS", disponible: n === 0, varianteTitulo: null,
+                 moneda: "ARS", disponible: n === 0,
+                 varianteTitulo: n === 0 ? "Talle M" : null,
                  variantIdParaCarrito: n === 0 ? "900" + n : null };
       }) });
     }
@@ -190,15 +203,13 @@
   var tagCfg = document.createElement("script");
   tagCfg.type = "application/json";
   tagCfg.id = "lovelist-config";
+  // Los textos NO se escriben acá: los inyecta scripts/banco-pruebas.mjs
+  // leyendo el embed y el catálogo reales. Cuando estaban copiados a mano el
+  // banco se quedó sin los nueve textos que sumó la Fase 2.4 y pintó botones
+  // vacíos dando todo en verde.
   tagCfg.textContent = JSON.stringify({
     moneda: "ARS", idioma: "es-AR", clienteConectado: LOGUEADO || MERGE_FALLA,
-    textos: { guardar: "Guardar en favoritos", quitar: "Quitar de favoritos",
-              misFavoritos: "Mis favoritos", abrirFavoritos: "Abrir mis favoritos",
-              cerrar: "Cerrar", vacio: "Todavía no guardaste nada.",
-              vacioAyuda: "Tocá el corazón.", cargando: "Cargando…",
-              productoGuardado: "Producto guardado", noSePudoCargar: "No pudimos cargarlo.",
-              errorGuardar: "No pudimos guardar el producto. Intentá de nuevo.",
-              errorQuitar: "No pudimos quitar." }
+    textos: __TEXTOS__
   });
   document.head.appendChild(tagCfg);
 </script>
@@ -222,6 +233,45 @@ window.__resultado = null;
   function n(sel) { var e = document.querySelector(sel); return e ? e.querySelectorAll("[data-lovelist-boton]").length : -1; }
   function esperar(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   function pedidosProducto() { return PEDIDOS.filter(function (p) { return /^\/products\/.*\.js/.test(p.url); }); }
+
+  // --- Comprobaciones de que lo pintado se puede LEER ---
+  //
+  // Existen porque el banco daba once PASS sobre una pagina cuyos botones no
+  // tenian una sola letra visible: se comprobaba que el elemento estuviera en
+  // el DOM, nunca que el comprador pudiera verlo. "Existe" y "se ve" son cosas
+  // distintas; es la misma leccion que dejo el contador dentro del menu movil.
+
+  function etiquetaDe(el) {
+    return (el.getAttribute("aria-label") || el.textContent || "").trim();
+  }
+
+  /**
+   * Un fondo transparente hereda el de la pagina: no hay nada que comparar.
+   *
+   * Hay que mirar el canal alfa de verdad. La primera version preguntaba si el
+   * color "termina en , 0)" y eso da verdadero para rgb(0, 0, 0), que es negro
+   * opaco: la comprobacion se saltaba justo los botones que queria atrapar y
+   * nacio dando verde sobre la pagina rota. Una prueba nueva tambien puede
+   * estar ciega, asi que hay que verla fallar antes de creerle.
+   */
+  function transparente(color) {
+    if (color === "transparent") return true;
+    var m = /^rgba?\(([^)]+)\)$/.exec(color);
+    if (!m) return false;
+    var partes = m[1].split(",");
+    return partes.length === 4 && parseFloat(partes[3]) === 0;
+  }
+
+  /** El texto se distingue del fondo del propio elemento. */
+  function contrasta(el) {
+    var cs = getComputedStyle(el);
+    if (transparente(cs.backgroundColor)) return true;
+    return cs.color !== cs.backgroundColor;
+  }
+
+  function botonesDe(raiz) {
+    return [].slice.call(raiz.querySelectorAll("button, .lovelist-boton-principal, .lovelist-boton-secundario, .lovelist-boton-carrito"));
+  }
 
   (async function () {
     await esperar(2500);
@@ -253,6 +303,57 @@ window.__resultado = null;
       ok("solo el comprable entra en 'agregar todo'", function () {
         var b = raiz.querySelector("[data-lovelist-agregar-todo]");
         return { cond: b && b.getAttribute("data-lovelist-agregar-todo") === "9000", extra: b && b.getAttribute("data-lovelist-agregar-todo") }; });
+
+      ok("todos los botones tienen etiqueta", function () {
+        var mudos = botonesDe(raiz).filter(function (b) { return !etiquetaDe(b); });
+        return { cond: botonesDe(raiz).length > 0 && mudos.length === 0,
+                 extra: mudos.length + " sin texto: " + mudos.map(function (b) { return b.className; }).join(", ") }; });
+
+      ok("y su texto se distingue del fondo del boton", function () {
+        var invisibles = botonesDe(raiz).filter(function (b) { return !contrasta(b); });
+        return { cond: invisibles.length === 0,
+                 extra: invisibles.map(function (b) {
+                   var cs = getComputedStyle(b);
+                   return b.className + " (" + cs.color + " sobre " + cs.backgroundColor + ")";
+                 }).join(" | ") }; });
+
+      ok("el boton de carrito individual esta en cada tarjeta comprable", function () {
+        var tarjetas = [].slice.call(raiz.querySelectorAll(".lovelist-tarjeta"));
+        var conBoton = tarjetas.filter(function (t) { return t.querySelector("[data-lovelist-al-carrito]"); });
+        var visible = conBoton.every(function (t) {
+          var b = t.querySelector("[data-lovelist-al-carrito]");
+          return etiquetaDe(b) && contrasta(b) && b.getBoundingClientRect().width > 0;
+        });
+        return { cond: conBoton.length === 1 && visible,
+                 extra: "tarjetas con boton=" + conBoton.length + " visibles=" + visible }; });
+
+      // Se mide contra el fondo de cada tarjeta, no la posicion absoluta de los
+      // botones. Comparar posiciones absolutas es fragil: dos tarjetas de
+      // contenido distinto pueden coincidir de casualidad y dar verde. Que la
+      // distancia al fondo sea la misma es lo que de verdad significa "las
+      // acciones estan ancladas abajo", y no depende de cuanto mida el texto.
+      ok("las acciones quedan ancladas al fondo de cada tarjeta", function () {
+        var tarjetas = [].slice.call(raiz.querySelectorAll(".lovelist-tarjeta"));
+        if (tarjetas.length < 2) return { cond: false, extra: "hacen falta 2 tarjetas, hay " + tarjetas.length };
+        var altos = tarjetas.map(function (t) { return Math.round(t.getBoundingClientRect().height); });
+        var margenes = tarjetas.map(function (t) {
+          var q = t.querySelector(".lovelist-tarjeta-quitar");
+          return Math.round(t.getBoundingClientRect().bottom - q.getBoundingClientRect().bottom);
+        });
+        var desvio = Math.max.apply(null, margenes) - Math.min.apply(null, margenes);
+
+        // Guarda del propio caso de prueba: si las dos tarjetas dejaran de
+        // tener contenido distinto, alinear seria trivial y esto no probaria
+        // nada. La primera trae variante y boton; la segunda, el agotado.
+        var desparejas = !!tarjetas[0].querySelector(".lovelist-tarjeta-variante")
+          && !!tarjetas[0].querySelector("[data-lovelist-al-carrito]")
+          && !tarjetas[1].querySelector(".lovelist-tarjeta-variante")
+          && !!tarjetas[1].querySelector(".lovelist-agotado");
+
+        return { cond: desvio <= 1 && desparejas,
+                 extra: desparejas
+                   ? "margenes " + margenes.join(" / ") + " altos " + altos.join(" / ")
+                   : "el caso dejo de ser desparejo: las tarjetas ya no difieren en contenido" }; });
 
       raiz.querySelector("[data-lovelist-al-carrito]").click();
       await esperar(200);

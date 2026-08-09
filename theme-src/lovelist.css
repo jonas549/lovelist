@@ -402,10 +402,28 @@
   padding: 0;
 }
 
+/* La grilla estira todas las tarjetas de una fila al mismo alto, pero eso solo
+   iguala la caja: el contenido seguia apilado arriba, asi que "Quitar" quedaba
+   a la altura donde terminara el texto de cada una. Con un titulo de dos
+   lineas, o con una variante de mas, los botones bailaban 40px entre tarjetas
+   vecinas.
+
+   La tarjeta reparte: los datos se comen el espacio sobrante y las acciones se
+   pegan al fondo. Asi quedan a la misma altura sin importar cuanto ocupe el
+   texto de arriba. */
 .lovelist-tarjeta {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.lovelist-tarjeta-datos {
+  flex: 1;
+}
+
+.lovelist-tarjeta .lovelist-boton-carrito,
+.lovelist-tarjeta .lovelist-agotado {
+  margin-top: auto;
 }
 
 .lovelist-tarjeta-imagen {
@@ -453,34 +471,59 @@
   background: rgba(128, 128, 128, 0.18);
 }
 
+/* Botones.
+   ---------------------------------------------------------------------------
+   La version anterior hacia `background: currentColor` con `color: inherit`,
+   asi que el fondo del boton terminaba siendo exactamente el color del texto:
+   un bloque solido con la etiqueta invisible. Habia un `mix-blend-mode` para
+   compensar que no podia funcionar — sobre el boton entero mezcla el bloque
+   con la pagina, no el texto con su propio fondo; y en el principal apuntaba a
+   `> *`, que no matchea un texto suelto. El comprador veia un rectangulo mudo
+   y en la tienda se leyo como "falta el boton de agregar al carrito".
+
+   Ahora ningun boton fija un color propio: el texto siempre es el del tema
+   (`currentColor`) y el enfasis del principal es un fondo derivado de ese
+   mismo color al 12%. Sale legible por construccion en tema claro y en tema
+   oscuro, sin saber nada del tema.
+
+   Se descarto leer las variables de color del tema, que era lo tentador. Dawn
+   guarda `--color-button` como tres numeros sueltos para meterlos en `rgb()`,
+   pero eso es una convencion suya, no un estandar: en un tema que la defina
+   como color completo, `rgb(#fff)` es invalido, la declaracion se descarta y
+   volvemos a un boton sin fondo legible. Adivinar el formato de una variable
+   ajena es exactamente el bug que estamos arreglando.
+
+   El radio si se hereda: son longitudes, y si el tema no las define o las
+   define raro el peor caso es una esquina fea, no una etiqueta invisible.
+
+   Las variables `--lovelist-*` son la costura para la Fase 2.5, donde el
+   merchant elige los colores desde los settings del app embed. */
+
 .lovelist-boton-principal,
 .lovelist-boton-secundario,
 .lovelist-boton-carrito {
   font: inherit;
   cursor: pointer;
-  border-radius: 4px;
   padding: 0.6em 1.1em;
   text-decoration: none;
   display: inline-block;
   text-align: center;
+  border-radius: var(--lovelist-radio, var(--buttons-radius, var(--border-radius, 4px)));
+  border: 1px solid currentColor;
+  /* Respaldo: si `color-mix` no esta disponible, el principal se queda con
+     este fondo y sigue siendo un boton de contorno perfectamente legible. */
+  background: transparent;
+  color: inherit;
 }
 
 .lovelist-boton-principal,
 .lovelist-boton-carrito {
-  border: 1px solid currentColor;
-  background: currentColor;
-  color: inherit;
-}
-
-/* El texto necesita contrastar con el fondo, que es currentColor del tema.
-   `mix-blend-mode` lo resuelve sin fijar un color propio que podría chocar. */
-.lovelist-boton-principal > *,
-.lovelist-boton-carrito {
-  mix-blend-mode: difference;
+  background: var(--lovelist-boton-fondo, color-mix(in srgb, currentColor 12%, transparent));
+  color: var(--lovelist-boton-texto, inherit);
+  font-weight: 600;
 }
 
 .lovelist-boton-secundario {
-  border: 1px solid currentColor;
   background: transparent;
   color: inherit;
 }

@@ -36,7 +36,7 @@ const CONSULTA = `#graphql
         title
         availableForSale
         price
-        product { id }
+        product { id hasOnlyDefaultVariant }
       }
     }
   }
@@ -135,7 +135,15 @@ export async function resolverProductos(
     const variante = variantesPorId.get(ref.variantId);
     if (!producto || !variante) continue;
 
-    producto.varianteTitulo = variante.title ?? null;
+    // Un producto sin opciones reales igual tiene una variante, y Shopify la
+    // llama "Default Title". Es un nombre interno: mostrarlo debajo del titulo
+    // no le dice nada al comprador y encima desalinea la tarjeta con una linea
+    // de mas. Se pregunta por `hasOnlyDefaultVariant` en vez de comparar contra
+    // el string, que es un valor interno que no tenemos garantizado.
+    producto.varianteTitulo = variante.product?.hasOnlyDefaultVariant
+      ? null
+      : variante.title ?? null;
+
     if (variante.availableForSale) {
       producto.variantIdParaCarrito = numerico(variante.id);
       producto.disponible = true;
@@ -166,5 +174,5 @@ type VarianteCruda = {
   title?: string | null;
   availableForSale: boolean;
   price?: string;
-  product?: { id: string } | null;
+  product?: { id: string; hasOnlyDefaultVariant?: boolean } | null;
 };
