@@ -3,6 +3,9 @@
 > Escrita el 2026-08-08 al cerrar la primera sesión de trabajo.
 > Corregida el 2026-08-09: decía que Jonas había probado la Fase 2.4 hasta el
 > paso 6 de 7. Es falso, no probó ninguno. Ver secciones 1 y 7.
+> Actualizada el 2026-08-10: los dos planes existen en el Partner Dashboard y
+> **la app se envió a revisión de Shopify**. Ver la sección 7 y
+> `BITACORA-2026-08-10.md`.
 >
 > Este documento existe para que otra instancia, sin ningún contexto previo,
 > pueda retomar exactamente donde quedamos. No es un resumen: es el registro de
@@ -29,6 +32,9 @@ $29/mes, sin plan gratuito ni prueba.
 | 2.2 | Theme app extension: embed, botón, inyección en colecciones | `6d64965`, más `25dfe61` | sí |
 | 2.3 | Invitados y fusión con la cuenta al iniciar sesión | `374b7a0` | sí |
 | 2.4 | Página completa, compartir, y resolución de productos en el servidor | `b057fc7` | **no, pendiente** |
+| 2.4-bis | Tres bugs de la prueba real, carrito sin redirección, identidad de producto | `d8f3a43` y previos | sí |
+| 2.5 | Configuración en el app embed, dashboard, navegación y pantallas de servicio | `31e2dd4`, `521b3c5` | sí |
+| 2.6 | Cobro con Shopify App Pricing, como límite por lista | `d8f3a43`, `6043588`, `074688e` | **parcial** |
 
 Las fases 1 y 2.2 necesitaron un commit extra de corrección **después** de que
 Jonas probara en la tienda real. Eso no es excepción: es el patrón. Ver la
@@ -38,6 +44,13 @@ sección 4.
 entregarla, así que no se ejecutó ninguno de sus pasos de verificación. Por el
 patrón de arriba, lo esperable es que necesite un commit de corrección. Ver la
 sección 7.
+
+**La 2.6 está verificada por partes pero no de punta a punta.** El límite se
+probó entero en la tienda real; el **flujo de pago con una suscripción real
+—alta, baja y que el límite suba a 200— nunca se recorrió**. Ver la sección 7.
+
+**El 2026-08-10 la app se envió a revisión de Shopify**, con esa verificación
+todavía pendiente. El diario de ese día está en `BITACORA-2026-08-10.md`.
 
 ### Qué está probado y dónde
 
@@ -851,6 +864,53 @@ En el mismo recorrido, y todos invisibles para las herramientas:
   muestra a la gente.*
 
 
+### 4.17 El plan gratuito era un handle que el código no conocía
+
+**Cómo se manifestó.** No llegó a manifestarse: se encontró verificando, el
+2026-08-10, justo después de crear los dos planes en el Partner Dashboard y
+antes de recorrer el flujo de pago.
+
+**Causa real.** Cuando se escribió la Fase 2.6 no existía ningún plan gratuito
+en App Pricing, así que "gratis" estaba modelado como **ausencia de
+suscripción** (`handle === null`). `HANDLE_PAGO = "pro"` era el único handle que
+el código conocía; `PLAN_SIN_SUSCRIPCION = "FREE"` no es un handle de Shopify,
+es el valor de la columna `Shop.plan`.
+
+Con el plan `gratis` creado, Shopify devuelve una suscripción **ACTIVE con
+`planHandle: "gratis"`**, que caía en la rama de handle desconocido — la que
+**conserva** el plan por la salvaguarda anti-degradación. Consecuencia: un
+merchant que bajaba de Pro a Gratis se quedaba con `Shop.plan = "PRO"` y el
+límite de 200 **para siempre**.
+
+**Cómo se arregló.** `esHandleGratuito()` trata `"gratis"` igual que `null`: los
+dos significan que la tienda no paga y los dos disparan la baja. La guarda de
+handle desconocido queda, porque sigue siendo correcta para un plan que este
+código no conozca. Además, si Shopify devuelve más de una suscripción activa a
+la vez —una baja que todavía no cerró— gana la de pago: bajarle el plan a
+alguien que paga es el peor error posible, y al revés el sondeo siguiente lo
+corrige.
+
+Salió un segundo bug del mismo lugar: los dos planes comparten la URL de
+retorno, así que a `/app/plans/confirm` también aterriza quien **elige Gratis**,
+y leía "Todavía no vemos tu suscripción". Ahora la pantalla distingue tres
+estados y el mensaje de reintentar quedó sólo para cuando de verdad no se pudo
+confirmar.
+
+**Lecciones.**
+
+- *Un modelo de datos hereda los supuestos del día en que se escribió.* "Gratis
+  es no tener suscripción" era cierto cuando no existía el plan gratuito. Crear
+  el plan cambió el mundo y el código siguió creyendo lo de antes, **sin fallar
+  ni avisar**, porque la salvaguarda lo tapaba.
+- *Una salvaguarda que conserva estado esconde el caso que tenía que agarrar.*
+  El `console.warn` estaba bien puesto, pero nadie mira los logs de Vercel
+  buscando algo que no sabe que existe.
+- *Cuando un valor externo no se puede cambiar —un handle, un ID, una URL—, el
+  código se adapta a él.* El handle de un plan de App Pricing sólo se cambia
+  borrando el plan y creándolo de nuevo.
+
+---
+
 ## 5. Trampas del entorno
 
 Lo que un recién llegado va a pisar.
@@ -987,6 +1047,43 @@ un número mayor que la cantidad de tarjetas. Es menor y quedó sin resolver.
 
 ## 7. Qué falta
 
+> **Estado al 2026-08-10: la app está en revisión de Shopify.** Todas las fases
+> del MVP están entregadas. Lo que sigue no es construcción: es verificación
+> que quedó debiendo y que conviene hacer **antes** de que la encuentre el
+> revisor.
+
+### El flujo de pago, sin recorrer — lo primero
+
+Es lo único de la Fase 2.6 que nunca se probó contra una suscripción real, y es
+el camino del dinero: donde un error cuesta más caro y donde este proyecto ya
+demostró que las cosas se rompen en silencio (ver 4.15 y 4.17).
+
+Hay que verificar, con la suscripción real:
+
+- que el botón lleve a la página de precios y muestre los dos planes;
+- que al suscribirse Shopify devuelva a `/app/plans/confirm` y la pantalla
+  muestre el plan Pro activo con el número 200;
+- que `confirm` **verifique contra Shopify** y escriba `Shop.plan`;
+- que el límite del storefront **suba a 200** de verdad: que el favorito número
+  11 entre;
+- **que al bajar al plan `gratis` el plan baje de verdad**, y que una lista que
+  quedó con más de 10 favoritos **conserve todo** y se pueda seguir quitando.
+
+El último es el que motivó el arreglo 4.17. Está cubierto por
+`npm run test:limite` contra la base y por el código nuevo, pero no contra una
+suscripción real — que es exactamente el nivel de confianza que ya falló tres
+veces.
+
+Arrancar **desde el estado inicial limpio**: si se viene de probar el alta, la
+lista ya tiene la basura de esa prueba encima (ver 4.11).
+
+### El requisito de session tokens
+
+Shopify no lo marcaba como cumplido. Hay que entrar al panel de la app, ver qué
+comprobación está fallando y corregirla. Puede ser que no haya tráfico medido
+todavía, o puede ser real. **No suponerlo: mirarlo.** Si el revisor lo mira y
+está incumplido, es motivo de rechazo.
+
 ### Verificación pendiente de la Fase 2.4 — los siete pasos, ninguno hecho
 
 **Nada de la 2.4 se probó en la tienda real.** La entrega y el final de la
@@ -1006,7 +1103,10 @@ Aprovechar la misma pasada para comprobar si el App Proxy reenvía la cabecera
 `X-Robots-Tag` en `/apps/lovelist/shared/:token`. Es la duda que quedó abierta
 en la sección 6 y solo se resuelve mirando la respuesta real.
 
-### Fase 2.5 — Configuración en el tema y admin
+### Fase 2.5 — Configuración en el tema y admin  ✅ hecha
+
+Entregada y probada en la tienda real el 2026-08-09. Lo que sigue es el alcance
+con el que se construyó, que se conserva porque explica **por qué** quedó así.
 
 **El alcance cambió el 2026-08-09.** La versión anterior guardaba la
 configuración visual en `Shop.settings` y obligaba al storefront a leerla desde
@@ -1175,32 +1275,30 @@ cada uno**. Agregar dos settings de un tipo rompe el deploy.
 ### Pendientes de lanzamiento (requisitos de la App Store)
 
 Salieron de leer la documentación vigente el 2026-08-09. **Ninguno es de la
-Fase 2.5**: son condiciones para publicar, y hay que resolverlas antes de
-mandar la app a revisión.
+Fase 2.5**: son condiciones para publicar.
 
-**El plan Pro todavía no existe en Shopify.** Es el pendiente que bloquea el
-cobro, y se ve al recorrer el flujo: el botón "Cambiar a Pro" lleva a
-`admin.shopify.com/store/{tienda}/charges/lovelist/pricing_plans`, la página es
-de Lovelist —el handle es correcto— pero devuelve **404**, porque los planes se
-crean en la ficha de la App Store y esa ficha no está armada. Del lado del
-código está todo: el handle se hornea en el build, la URL se arma bien, el
-sondeo lee `activeSubscriptions` y `/confirm` verifica contra Shopify. Falta
-crear el plan con handle **`pro`**, US$ 29/mes, sin trial. Hasta entonces el
-botón lleva a un 404.
+**Actualizado el 2026-08-10: la app se envió a revisión.** Lo que sigue es el
+estado de cada requisito al momento del envío.
 
-**Política de privacidad publicada.** El listado la exige y hoy no existe. Hace
-falta una URL pública. Es fácil de escribir —no guardamos datos personales, ni
-nombre ni email de nadie, solo IDs— pero tiene que estar publicada y dicha en
-los términos que pide Shopify.
+**Los dos planes existen.** ✅ Creados en el Partner Dashboard el 2026-08-10:
 
-**Assets del listado.** Ícono de 1200×1200, capturas, medios de la funcionalidad,
-introducción de 100 caracteres, detalle de 500, y un **screencast completo del
-proceso de instalación y uso, en inglés o subtitulado en inglés**. Ese último es
-el que más trabajo lleva y el que más se subestima.
+| Handle | Nombre | Redirect URL |
+|---|---|---|
+| `gratis` | Free | `/app/plans/confirm` |
+| `pro` | $29/month | `/app/plans/confirm` |
 
-**Medición de Lighthouse del storefront.** Shopify exige que la app **no baje
-más de 10 puntos** el score de Lighthouse de la tienda. Nunca lo medimos. Hay
-que hacerlo con la app activa y sin ella, sobre la misma página, y comparar.
+Con esto el botón "Cambiar a Pro" dejó de llevar a un 404. **El handle no se
+puede cambiar después de creado** —sólo borrar el plan y crearlo de nuevo—, así
+que ante un desacuerdo entre el dashboard y el código, el que se adapta es el
+código. El plan `gratis` obligó a un arreglo: ver 4.17.
+
+**Política de privacidad, assets del listado y Lighthouse.** Shopify no deja
+enviar sin la mayoría de esto, así que se resolvió antes del envío. **Falta el
+registro de con qué quedó cada uno**: qué URL tiene la política, qué ícono y
+capturas se subieron, qué dicen la introducción de 100 caracteres y el detalle
+de 500, cómo quedó el screencast, y —si se midió— qué dio Lighthouse con la app
+activa y sin ella. Anotarlo es diez minutos y es lo único que va a permitir
+rastrear un rechazo que mencione un asset.
 
 **Métricas del admin.** LCP ≤ 2,5 s, CLS ≤ 0,1 e INP ≤ 200 ms, a percentil 75
 sobre 28 días y con mínimo 100 mediciones. Se miden solas con App Bridge; hay
