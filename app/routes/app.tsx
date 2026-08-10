@@ -37,11 +37,23 @@ export default function App() {
   return (
     <AppProvider embedded apiKey={apiKey}>
       {/* La navegación la pinta el admin en su barra lateral, no nosotros.
-          `rel="home"` marca cuál es la pantalla de entrada. */}
+          `rel="home"` marca cuál es la pantalla de entrada.
+
+          Los dos enlaces a `/app` son a propósito y no sobran. App Bridge
+          arma el menú recorriendo los hijos y **saltea** el que tenga
+          `rel="home"` (`if (isHomeAnchor(e)) continue`), así que ese enlace
+          designa la ruta de inicio pero nunca se dibuja: por diseño, quien
+          lleva al inicio es el nombre de la app arriba del grupo.
+
+          Sacarle el `rel="home"` para que aparezca no sirve: la ruta de
+          inicio volvería a su valor por defecto, `/`, que es la landing
+          pública y no el dashboard. Por eso el primero se queda como está y
+          el segundo, sin `rel`, es el que el merchant ve. */}
       <s-app-nav>
         <a href="/app" rel="home">
           {t("nav.inicio")}
         </a>
+        <a href="/app">{t("nav.inicio")}</a>
         <a href="/app/settings">{t("nav.configuracion")}</a>
         {/* El merchant tiene que poder subir y bajar de plan sin escribirle a
             soporte ni reinstalar la app: lo pide Shopify explícitamente. */}
