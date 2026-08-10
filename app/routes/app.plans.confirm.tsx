@@ -4,7 +4,12 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
 import { buscarShop } from "../proxy.server";
-import { LIMITE_ITEMS_PRO, sincronizarPlan, tienePlanActivo } from "../plan.server";
+import {
+  LIMITE_ITEMS_FREE,
+  LIMITE_ITEMS_PRO,
+  estadoDeConfirmacion,
+  sincronizarPlanConLectura,
+} from "../plan.server";
 import { t, ti } from "../i18n";
 
 /**
@@ -20,28 +25,51 @@ import { t, ti } from "../i18n";
  *
  * Se sincroniza siempre, sin TTL: el merchant acaba de suscribirse y esperar
  * cinco minutos para reflejarlo sería absurdo.
+ *
+ * Los dos planes comparten esta URL de retorno, así que acá también aterriza
+ * quien **elige Gratis**. Ese caso no es un fallo de confirmación y no puede
+ * mostrar el mensaje de "todavía no vemos tu suscripción": la vimos, y es la
+ * que pidió. Por eso se mira la lectura y no solo el plan resultante.
  */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
 
   const shop = await buscarShop(session.shop);
-  const alDia = shop ? await sincronizarPlan(shop) : null;
+  const sincronizado = shop ? await sincronizarPlanConLectura(shop) : null;
 
-  return { activo: tienePlanActivo(alDia), limitePro: LIMITE_ITEMS_PRO };
+  return {
+    estado: sincronizado
+      ? estadoDeConfirmacion(sincronizado.shop, sincronizado.lectura)
+      : ("sinConfirmar" as const),
+    limiteFree: LIMITE_ITEMS_FREE,
+    limitePro: LIMITE_ITEMS_PRO,
+  };
 };
 
 export default function ConfirmarPlan() {
-  const { activo, limitePro } = useLoaderData<typeof loader>();
+  const { estado, limiteFree, limitePro } = useLoaderData<typeof loader>();
 
   return (
     <s-page heading={t("planes.titulo")}>
-      {activo ? (
+      {estado === "pro" ? (
         <s-section heading={t("planes.confirmadoTitulo")}>
           <s-paragraph>
             {ti("planes.confirmadoTexto", { pro: limitePro })}
           </s-paragraph>
           <s-button href="/app" variant="primary">
             {t("planes.confirmadoIr")}
+          </s-button>
+        </s-section>
+      ) : estado === "gratis" ? (
+        <s-section heading={t("planes.gratisTitulo")}>
+          <s-paragraph>
+            {ti("planes.gratisTexto", { free: limiteFree })}
+          </s-paragraph>
+          <s-button href="/app" variant="primary">
+            {t("planes.confirmadoIr")}
+          </s-button>
+          <s-button href="/app/plans" variant="secondary">
+            {t("planes.gratisSubir")}
           </s-button>
         </s-section>
       ) : (

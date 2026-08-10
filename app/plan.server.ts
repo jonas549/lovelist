@@ -24,8 +24,38 @@ import { unauthenticated } from "./shopify.server";
 /** El único plan pago. Va en minúsculas: es el handle, no el nombre. */
 export const HANDLE_PAGO = "pro";
 
+/**
+ * El plan gratuito, tal como está creado en el Partner Dashboard.
+ *
+ * Existe como plan de App Pricing —y no como simple ausencia de suscripción—
+ * porque así el merchant tiene una forma explícita de **bajar de plan** desde
+ * la página de precios de Shopify, en vez de tener que cancelar. El listado
+ * además muestra el tier gratuito, que es honesto: la app funciona entera sin
+ * pagar.
+ *
+ * La consecuencia es que Shopify puede devolver una suscripción ACTIVE con
+ * este handle, y eso hay que leerlo como "no paga", no como plan desconocido.
+ * Sin esto, una baja de Pro a Gratis no se reflejaría **nunca**: la salvaguarda
+ * anti-degradación conservaría el plan pagado para siempre.
+ *
+ * El handle no se puede cambiar después de creado, así que este valor tiene que
+ * seguir al dashboard y no al revés.
+ */
+export const HANDLE_GRATIS = "gratis";
+
 export const PLAN_PAGO = "PRO";
 export const PLAN_SIN_SUSCRIPCION = "FREE";
+
+/**
+ * Si un handle significa "esta tienda no paga".
+ *
+ * Son dos casos y valen lo mismo: no hay ninguna suscripción (`null`), o hay
+ * una al plan gratuito. Un handle que no es ninguno de los dos ni el de pago
+ * es desconocido, y eso se trata aparte.
+ */
+export function esHandleGratuito(handle: string | null): boolean {
+  return handle === null || handle === HANDLE_GRATIS;
+}
 
 /** Cada cuánto se le vuelve a preguntar a Shopify. */
 const TTL_MS = 5 * 60 * 1000;
@@ -132,11 +162,22 @@ export async function leerSuscripcion(
       return { estado: "confirmado", handle: null };
     }
 
+    const handles: string[] = [];
     for (const s of activas) {
       for (const item of s.lineItems ?? []) {
         const handle = item.plan?.pricingDetails?.planHandle;
-        if (handle) return { estado: "confirmado", handle };
+        if (handle) handles.push(handle);
       }
+    }
+
+    if (handles.length) {
+      // Si hay más de una activa a la vez —una baja que Shopify todavía no
+      // terminó de cerrar, por ejemplo— gana la de pago. Quedarse con la
+      // primera que aparece podría bajarle el plan a alguien que está pagando,
+      // que es el peor error posible. Al revés no: conservar Pro un rato de más
+      // no le cuesta nada a nadie, y el sondeo siguiente lo corrige.
+      const handle = handles.includes(HANDLE_PAGO) ? HANDLE_PAGO : handles[0];
+      return { estado: "confirmado", handle };
     }
 
     // Hay suscripción activa pero no pudimos leerle el handle. No es "no
@@ -159,8 +200,8 @@ export async function leerSuscripcion(
  * Las reglas, en orden:
  *
  *  - confirmado con el handle pago  → se activa.
- *  - confirmado sin suscripciones   → **se baja**. Es una respuesta sana con
- *    lista vacía: confirmación, no ambigüedad. Sin esto, una cancelación no se
+ *  - confirmado sin suscripciones, o con el handle gratuito → **se baja**. Es
+ *    una respuesta sana: confirmación, no ambigüedad. Sin esto, una baja no se
  *    reflejaría nunca y el merchant conservaría el plan pagado para siempre.
  *  - confirmado con un handle desconocido → **se conserva**. Puede ser un plan
  *    nuevo que existe en el dashboard y que este código todavía no sabe leer.
@@ -170,8 +211,14 @@ export async function leerSuscripcion(
  * Nada de tragarse los fallos en silencio: los dos casos que conservan el plan
  * dejan rastro. Un fallo silencioso en el sondeo convierte un error puntual en
  * uno permanente que nadie ve.
+ *
+ * Devuelve también la lectura porque las pantallas necesitan distinguir "está
+ * en Gratis" de "no pudimos confirmar nada": el plan resultante es el mismo y
+ * el mensaje que hay que mostrar no.
  */
-export async function sincronizarPlan(shop: Shop): Promise<Shop> {
+export async function sincronizarPlanConLectura(
+  shop: Shop,
+): Promise<{ shop: Shop; lectura: LecturaDeSuscripcion }> {
   const lectura = await leerSuscripcion(shop.domain);
   const ahora = new Date();
 
@@ -181,20 +228,21 @@ export async function sincronizarPlan(shop: Shop): Promise<Shop> {
     );
     // No se toca `planRevisadoAt`: no llegamos a revisar nada, y marcarlo haría
     // que no se reintentara hasta que venza el TTL.
-    return shop;
+    return { shop, lectura };
   }
 
-  if (lectura.handle === null) {
+  if (esHandleGratuito(lectura.handle)) {
     if (shop.plan === PLAN_SIN_SUSCRIPCION) {
-      return prisma.shop.update({
+      const actualizado = await prisma.shop.update({
         where: { id: shop.id },
         data: { planRevisadoAt: ahora },
       });
+      return { shop: actualizado, lectura };
     }
     console.info(
-      `[Lovelist] ${shop.domain} ya no tiene suscripción activa: baja de "${shop.plan}" a "${PLAN_SIN_SUSCRIPCION}"`,
+      `[Lovelist] ${shop.domain} pasó a ${lectura.handle === HANDLE_GRATIS ? `el plan "${HANDLE_GRATIS}"` : "no tener suscripción activa"}: baja de "${shop.plan}" a "${PLAN_SIN_SUSCRIPCION}"`,
     );
-    return prisma.shop.update({
+    const actualizado = await prisma.shop.update({
       where: { id: shop.id },
       data: {
         plan: PLAN_SIN_SUSCRIPCION,
@@ -202,16 +250,17 @@ export async function sincronizarPlan(shop: Shop): Promise<Shop> {
         planRevisadoAt: ahora,
       },
     });
+    return { shop: actualizado, lectura };
   }
 
   if (lectura.handle !== HANDLE_PAGO) {
     console.warn(
       `[Lovelist] ${shop.domain} tiene el plan "${lectura.handle}", que este código no conoce. Se conserva "${shop.plan}".`,
     );
-    return shop;
+    return { shop, lectura };
   }
 
-  return prisma.shop.update({
+  const actualizado = await prisma.shop.update({
     where: { id: shop.id },
     data: {
       plan: PLAN_PAGO,
@@ -219,6 +268,11 @@ export async function sincronizarPlan(shop: Shop): Promise<Shop> {
       planRevisadoAt: ahora,
     },
   });
+  return { shop: actualizado, lectura };
+}
+
+export async function sincronizarPlan(shop: Shop): Promise<Shop> {
+  return (await sincronizarPlanConLectura(shop)).shop;
 }
 
 /** Sondea solo si la última lectura quedó vieja. */
@@ -226,6 +280,31 @@ export async function sincronizarPlanSiHaceFalta(shop: Shop): Promise<Shop> {
   const reciente =
     shop.planRevisadoAt && Date.now() - shop.planRevisadoAt.getTime() < TTL_MS;
   return reciente ? shop : sincronizarPlan(shop);
+}
+
+/**
+ * Qué mostrarle al merchant que vuelve de la página de precios.
+ *
+ * Los tres casos son distintos para quien está mirando la pantalla:
+ *
+ *  - `pro`: se suscribió y está confirmado contra Shopify.
+ *  - `gratis`: eligió el plan gratuito **a propósito**, o acaba de bajar de
+ *    plan. Decirle "todavía no vemos tu suscripción" acá es mentirle: la vimos
+ *    perfectamente y es la que pidió.
+ *  - `sinConfirmar`: no pudimos leer nada, o leímos un plan que no conocemos.
+ *    Es el único caso donde corresponde pedirle que vuelva a comprobar.
+ */
+export type EstadoDeConfirmacion = "pro" | "gratis" | "sinConfirmar";
+
+export function estadoDeConfirmacion(
+  shop: Pick<Shop, "plan"> | null,
+  lectura: LecturaDeSuscripcion,
+): EstadoDeConfirmacion {
+  if (tienePlanActivo(shop)) return "pro";
+  if (lectura.estado === "confirmado" && esHandleGratuito(lectura.handle)) {
+    return "gratis";
+  }
+  return "sinConfirmar";
 }
 
 export function tienePlanActivo(shop: Pick<Shop, "plan"> | null): boolean {

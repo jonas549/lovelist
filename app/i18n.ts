@@ -141,6 +141,17 @@ export const es = {
     confirmadoTitulo: "¡Listo! Tu plan Pro está activo",
     confirmadoTexto: "Tus compradores ya pueden guardar hasta {pro} productos por lista.",
     confirmadoIr: "Ir al inicio",
+
+    // Quien elige Gratis en la página de precios vuelve por la misma URL de
+    // retorno que quien se suscribe. No es un fallo de confirmación: es el
+    // plan que pidió, y hay que decírselo así. Sirve para los dos casos —el
+    // que arranca en Gratis y el que baja de Pro— porque el resultado que ve
+    // es el mismo.
+    gratisTitulo: "Estás en el plan Gratis",
+    gratisTexto:
+      "Tus compradores pueden guardar hasta {free} productos por lista. Todo lo demás de Lovelist sigue funcionando igual.",
+    gratisSubir: "Ver el plan Pro",
+
     noConfirmadoTitulo: "Todavía no vemos tu suscripción",
     noConfirmadoTexto:
       "Si acabas de suscribirte, puede tardar unos segundos en registrarse. Vuelve a comprobar; si sigue igual, escribinos.",
