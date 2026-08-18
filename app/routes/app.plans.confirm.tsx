@@ -3,12 +3,11 @@ import { useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
-import { buscarShop } from "../proxy.server";
 import {
   LIMITE_ITEMS_FREE,
   LIMITE_ITEMS_PRO,
   estadoDeConfirmacion,
-  sincronizarPlanConLectura,
+  sincronizarPlanDeTienda,
 } from "../plan.server";
 import { t, ti } from "../i18n";
 
@@ -30,17 +29,29 @@ import { t, ti } from "../i18n";
  * quien **elige Gratis**. Ese caso no es un fallo de confirmación y no puede
  * mostrar el mensaje de "todavía no vemos tu suscripción": la vimos, y es la
  * que pidió. Por eso se mira la lectura y no solo el plan resultante.
+ *
+ * `sincronizarPlanDeTienda` asegura la fila de la tienda: esta pantalla **no
+ * puede** volver a depender de que exista. Antes lo hacía, y en una tienda
+ * recién instalada —la del revisor— eso significaba decirle "no vemos tu
+ * suscripción" a alguien que acababa de pagar, sin salida posible.
  */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
 
-  const shop = await buscarShop(session.shop);
-  const sincronizado = shop ? await sincronizarPlanConLectura(shop) : null;
+  const { shop, lectura } = await sincronizarPlanDeTienda(session.shop);
+  const estado = estadoDeConfirmacion(shop, lectura);
+
+  // El único caso que queda sin confirmar es que Shopify no haya contestado, y
+  // es el que hay que poder rastrear después: acá el merchant ya pagó.
+  if (estado === "sinConfirmar") {
+    console.error(
+      `[Lovelist] ${session.shop} volvió de la página de precios y no se pudo confirmar el plan:`,
+      lectura.estado === "desconocido" ? lectura.motivo : `handle "${lectura.handle}"`,
+    );
+  }
 
   return {
-    estado: sincronizado
-      ? estadoDeConfirmacion(sincronizado.shop, sincronizado.lectura)
-      : ("sinConfirmar" as const),
+    estado,
     limiteFree: LIMITE_ITEMS_FREE,
     limitePro: LIMITE_ITEMS_PRO,
   };

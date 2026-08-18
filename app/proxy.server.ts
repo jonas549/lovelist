@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
 
+import type { Shop } from "@prisma/client";
+
 import prisma from "./db.server";
 import { t } from "./i18n";
 
@@ -282,27 +284,42 @@ export function buscarShop(dominio: string) {
 }
 
 /**
- * La app está instalada: borra cualquier marca de desinstalación vieja.
+ * La fila de la tienda, garantizada, para el admin autenticado.
  *
- * Se llama desde el admin, que es el único lugar donde lo sabemos con certeza:
- * si `authenticate.admin` devolvió una sesión, la app está instalada.
+ * Se llama desde el admin porque es el único lugar donde sabemos con certeza
+ * que la app está instalada: si `authenticate.admin` devolvió una sesión, está
+ * instalada. Hace dos cosas que antes hacían falta juntas y no pasaban nunca:
  *
- * Antes esto solo pasaba en `obtenerOCrearShop`, o sea en las escrituras del
- * storefront. Con el paywall esas escrituras están bloqueadas justo cuando la
- * tienda no tiene plan, así que una tienda que desinstalaba y reinstalaba
- * quedaba marcada como desinstalada para siempre.
+ *  - **Crea la fila si no existe.** Hasta el 2026-08-18 la fila `Shop` sólo
+ *    nacía en `obtenerOCrearShop`, o sea en una escritura del storefront. En
+ *    una tienda recién instalada donde nadie guardó todavía ningún favorito no
+ *    había fila, y como todo el admin guardaba con `if (shop)`, el sondeo del
+ *    plan **no se ejecutaba**: quien se suscribía veía "todavía no vemos tu
+ *    suscripción" para siempre y el límite del storefront se quedaba en el del
+ *    plan gratuito con Pro pagado. Es el caso de una instalación nueva, que es
+ *    exactamente el del revisor de Shopify.
+ *  - **Limpia `uninstalledAt`.** No hay webhook de reinstalación, así que una
+ *    marca vieja de desinstalación sería mentira y nadie la borraría.
  *
- * El `updateMany` con la marca en el `where` hace que no escriba nada en el
- * caso normal, que es el 99,9% de las cargas del admin.
+ * Lee primero y sólo escribe si hace falta: en el caso normal —fila que existe
+ * y sin marca— son cero escrituras, que es el 99,9% de las cargas del admin.
+ * Esa era la razón de ser del `updateMany` que esto reemplaza, y se conserva.
  */
-export async function confirmarInstalada(dominio: string): Promise<void> {
+export async function obtenerShopDelAdmin(dominio: string): Promise<Shop> {
+  const existente = await prisma.shop.findUnique({ where: { domain: dominio } });
+  if (existente && !existente.uninstalledAt) return existente;
+
   try {
-    await prisma.shop.updateMany({
-      where: { domain: dominio, uninstalledAt: { not: null } },
-      data: { uninstalledAt: null },
+    return await prisma.shop.upsert({
+      where: { domain: dominio },
+      update: { uninstalledAt: null },
+      create: { domain: dominio },
     });
   } catch (e) {
-    console.warn("[proxy] no se pudo limpiar uninstalledAt", e);
+    // Dos cargas del admin a la vez sobre una tienda sin fila pueden chocar en
+    // el índice único. La fila que ganó sirve igual: se relee y listo.
+    console.warn("[admin] no se pudo asegurar la fila de la tienda, se relee", e);
+    return prisma.shop.findUniqueOrThrow({ where: { domain: dominio } });
   }
 }
 

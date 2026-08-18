@@ -1,6 +1,7 @@
 import type { Shop } from "@prisma/client";
 
 import prisma from "./db.server";
+import { obtenerShopDelAdmin } from "./proxy.server";
 import { unauthenticated } from "./shopify.server";
 
 /**
@@ -273,6 +274,32 @@ export async function sincronizarPlanConLectura(
 
 export async function sincronizarPlan(shop: Shop): Promise<Shop> {
   return (await sincronizarPlanConLectura(shop)).shop;
+}
+
+/**
+ * El camino del dinero, entero, a partir del dominio y nada más.
+ *
+ * **No depende de que la fila de la tienda exista**: la asegura. Es la lección
+ * del 2026-08-18, y es la razón de que esta función exista en vez de que cada
+ * pantalla haga `buscarShop()` y siga con `if (shop)`.
+ *
+ * Esa guarda parecía inofensiva —"si no hay fila, no hay nada que contar"— y
+ * en las pantallas de plan significaba otra cosa: que ni siquiera se le
+ * preguntaba a Shopify. El merchant pagaba, la pantalla decía "todavía no
+ * vemos tu suscripción", y el botón de reintentar recorría el mismo camino
+ * nulo, así que no había forma de salir. Un dato faltante se leía como una
+ * respuesta negativa de Shopify.
+ *
+ * La regla que queda: en el camino del dinero, la única razón aceptable para
+ * no saber qué plan tiene una tienda es que **Shopify no haya contestado**.
+ * Cualquier otra cosa —una fila que falta, un estado que nadie creó— se
+ * resuelve acá y no se propaga como incertidumbre.
+ */
+export async function sincronizarPlanDeTienda(
+  shopDominio: string,
+): Promise<{ shop: Shop; lectura: LecturaDeSuscripcion }> {
+  const shop = await obtenerShopDelAdmin(shopDominio);
+  return sincronizarPlanConLectura(shop);
 }
 
 /** Sondea solo si la última lectura quedó vieja. */

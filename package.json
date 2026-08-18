@@ -23,7 +23,8 @@
     "graphql-codegen": "graphql-codegen",
     "vite": "vite",
     "typecheck": "react-router typegen && tsc --noEmit",
-    "test:limite": "node --env-file=.env scripts/correr-ts.mjs scripts/prueba-limite.ts"
+    "test:limite": "node --env-file=.env scripts/correr-ts.mjs scripts/prueba-limite.ts",
+    "test:plan": "node --env-file=.env scripts/correr-ts.mjs scripts/prueba-plan.ts"
   },
   "type": "module",
   "engines": {

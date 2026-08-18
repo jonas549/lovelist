@@ -3,11 +3,10 @@ import { useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 
 import { authenticate } from "../shopify.server";
-import { buscarShop } from "../proxy.server";
 import {
   LIMITE_ITEMS_FREE,
   LIMITE_ITEMS_PRO,
-  sincronizarPlan,
+  sincronizarPlanDeTienda,
   tienePlanActivo,
   urlDePlanes,
 } from "../plan.server";
@@ -22,15 +21,18 @@ import { t, ti } from "../i18n";
  * Se sondea sin ventana de espera a propósito: el merchant está mirando una
  * decisión de dinero y no puede ver un plan viejo. Es el mismo criterio que
  * usa DiscountFlow en su pantalla de planes.
+ *
+ * Igual que en `confirm`, la fila de la tienda se asegura y no se asume: sin
+ * eso, una tienda recién instalada veía "Gratis" marcado como plan actual
+ * aunque estuviera pagando Pro.
  */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
 
-  const shop = await buscarShop(session.shop);
-  const alDia = shop ? await sincronizarPlan(shop) : null;
+  const { shop } = await sincronizarPlanDeTienda(session.shop);
 
   return {
-    pro: tienePlanActivo(alDia),
+    pro: tienePlanActivo(shop),
     url: urlDePlanes(session.shop),
     limiteFree: LIMITE_ITEMS_FREE,
     limitePro: LIMITE_ITEMS_PRO,

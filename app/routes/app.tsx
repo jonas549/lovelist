@@ -4,17 +4,19 @@ import { boundary } from "@shopify/shopify-app-react-router/server";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 
 import { authenticate } from "../shopify.server";
-import { buscarShop, confirmarInstalada } from "../proxy.server";
+import { obtenerShopDelAdmin } from "../proxy.server";
 import { sincronizarPlanSiHaceFalta } from "../plan.server";
 import { t, ti } from "../i18n";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
 
-  // La app está instalada: si quedaba una marca de desinstalación vieja, era
-  // mentira. Se limpia acá porque es el único lugar donde lo sabemos con
-  // certeza.
-  await confirmarInstalada(session.shop);
+  // La app está instalada: acá lo sabemos con certeza, así que es el lugar
+  // donde la fila de la tienda tiene que existir sí o sí. Crea la que falte
+  // —una instalación nueva donde el storefront todavía no escribió nada— y
+  // limpia cualquier marca de desinstalación vieja, que sin webhook de
+  // reinstalación no borraría nadie.
+  const shop = await obtenerShopDelAdmin(session.shop);
 
   // **Acá NO hay paywall.** Hubo uno —sin suscripción, el admin entero
   // redirigía a la pantalla de planes— y se sacó: una app pública no puede
@@ -24,8 +26,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // El plan se sigue sondeando —con su ventana de cinco minutos— porque el
   // dashboard lo necesita para avisar cuando el límite del gratuito estorba,
   // pero no decide si se entra o no.
-  const shop = await buscarShop(session.shop);
-  if (shop) await sincronizarPlanSiHaceFalta(shop);
+  await sincronizarPlanSiHaceFalta(shop);
 
   // eslint-disable-next-line no-undef
   return { apiKey: process.env.SHOPIFY_API_KEY || "" };
