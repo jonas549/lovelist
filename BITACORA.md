@@ -16,8 +16,8 @@
 > del storefront ya no está al 68% sino al **84%** (sección 6).
 > Actualizada el 2026-10-13: los cambios del 26 de agosto estuvieron **mes y
 > medio publicados sin commitear**; se commitearon y pushearon. Arreglo de
-> corazones duplicados en tarjetas Horizon, pusheado pero **sin desplegar** por
-> un 403 de la CLI. El bundle está al **86%** crudo. Ver
+> corazones duplicados en tarjetas Horizon, publicado en **`lovelist-20`**.
+> El bundle está al **86%** crudo. Ver
 > `BITACORA-2026-10-13.md`.
 >
 > Este documento existe para que otra instancia, sin ningún contexto previo,
