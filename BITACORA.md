@@ -14,6 +14,11 @@
 > Ver `BITACORA-2026-08-26.md`. Ojo con dos números de este documento que ese
 > día quedaron viejos: el CLI ya no es 4.6.1 sino 4.7.0 (sección 2), y el bundle
 > del storefront ya no está al 68% sino al **84%** (sección 6).
+> Actualizada el 2026-10-13: los cambios del 26 de agosto estuvieron **mes y
+> medio publicados sin commitear**; se commitearon y pushearon. Arreglo de
+> corazones duplicados en tarjetas Horizon, pusheado pero **sin desplegar** por
+> un 403 de la CLI. El bundle está al **86%** crudo. Ver
+> `BITACORA-2026-10-13.md`.
 >
 > Este documento existe para que otra instancia, sin ningún contexto previo,
 > pueda retomar exactamente donde quedamos. No es un resumen: es el registro de
@@ -996,6 +1001,16 @@ el margen sigue siendo el que es, así que la regla se mantiene para lo que
 venga: si algo suma peso al storefront, hay que partir el bundle —por ejemplo,
 dejar en el embed solo lo que hace falta en todas las páginas y cargar la lógica
 de la página completa aparte.
+
+### Una tarjeta con carrusel de imágenes adentro puede recibir más de un corazón
+
+*(Anotada el 2026-10-13.)* La inyección deja un corazón por producto y por
+bloque, y el bloque se corta donde hay dos enlaces con foto del mismo producto,
+porque eso suele ser dos tarjetas. Un tema que ponga en la tarjeta varias
+imágenes, **cada una con su propio enlace**, cae del lado equivocado de esa
+regla. No es regresión —antes ya recibía uno por imagen— y Horizon no lo hace.
+Se decidió no arreglarlo hasta verlo en un tema real. Ver
+`BITACORA-2026-10-13.md`, sección 7.
 
 ### El selector de listas existe pero no se puede usar
 
