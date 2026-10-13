@@ -23,6 +23,15 @@
  *                            embed: estrella en vez de corazón, sin rellenar
  *                            al guardar y con el contador apagado
  *   /?pagina&config-alt       lo mismo, para la clase de botón del tema
+ *   /?pagina&tema-ajeno       un tema que NO es Dawn: raíz al 62,5%, botones
+ *                            `.btn` en vez de `.button`, y el header
+ *                            dimensionando sus íconos desde el contenedor.
+ *                            Es la familia Horizon, que es lo que Shopify le
+ *                            da hoy a una tienda nueva. Los cuatro fallos que
+ *                            aparecieron en Miniatur viven acá; el banco los
+ *                            daba todos en verde porque simulaba Dawn y solo
+ *                            Dawn. **Hay que correrlo con `&pagina`**: los
+ *                            botones de la app solo existen en esa pantalla.
  *
  * Los dos que llevan `sin-drawer` y `secciones-nulas` terminan navegando a
  * propósito: aterrizar en /cart ES el resultado. La página de destino la sirve

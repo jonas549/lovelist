@@ -376,28 +376,198 @@
     });
   }
 
+  // Herencia del estilo de botón del tema
+  // -------------------------------------------------------------------------
+  // Tres niveles, en orden de preferencia:
+  //
+  //   1. La clase que configuró el merchant, **si de verdad resuelve a algo**.
+  //   2. Si no, el estilo computado de un botón real del tema, copiado.
+  //   3. Si no, el estilo propio de Lovelist, que es legible en cualquier tema.
+  //
+  // El nivel 1 antes se aplicaba a ciegas. El default era "button", que es la
+  // clase de Dawn; en un tema que no la tenga —Horizon, Pebble y toda esa
+  // familia usan `.btn`— agregábamos una clase inerte y **además** apagábamos
+  // nuestro propio estilo, así que los botones salían como texto plano. Llegó
+  // así a un cliente real. Ahora nada se apaga sin confirmar que hay algo que
+  // lo reemplace.
+
+  var BOTON_PROPS = [
+    "backgroundColor",
+    "borderTopWidth",
+    "borderTopColor",
+    "borderTopLeftRadius",
+    "paddingTop",
+    "paddingLeft",
+    "fontFamily",
+    "fontWeight",
+    "color",
+    "textTransform",
+    "letterSpacing",
+    "height",
+  ];
+
   /**
-   * Le pega a nuestros botones la clase de botón del tema, si el merchant la
-   * configuró. Por omisión es "button", que es la de Dawn y la de la mayoría de
-   * los temas derivados; si el tema no la tiene, agregar una clase que no
-   * existe no hace nada.
+   * ¿La clase existe en el tema?
    *
-   * Cuando la clase se aplica, nuestra decoración se corre a un lado —de eso se
-   * encarga el CSS con `.lovelist-boton-tema`— para no pelear con la del tema.
+   * Se comparan dos botones vacíos fuera de pantalla, uno con la clase y otro
+   * sin ella. Si ninguna propiedad de botón cambia, la clase no la define
+   * nadie y aplicarla sería cambiar nuestro estilo por nada.
    */
-  function aplicarClaseDelTema(raiz) {
+  function claseResuelve(clase) {
+    var pelado = document.createElement("button");
+    var vestido = document.createElement("button");
+    var fuera = "position:absolute;left:-9999px;top:0;visibility:hidden";
+    pelado.style.cssText = fuera;
+    vestido.style.cssText = fuera;
+    vestido.className = clase;
+    document.body.appendChild(pelado);
+    document.body.appendChild(vestido);
+
+    var a = window.getComputedStyle(pelado);
+    var b = window.getComputedStyle(vestido);
+    var distinto = BOTON_PROPS.some(function (p) {
+      return a[p] !== b[p];
+    });
+
+    pelado.remove();
+    vestido.remove();
+    return distinto;
+  }
+
+  function esTransparente(c) {
+    return !c || c === "transparent" || /rgba\(0, 0, 0, 0\)/.test(c);
+  }
+
+  /**
+   * El fondo opaco del drawer, tomado del tema.
+   *
+   * El panel es `position: fixed` sobre la página, así que su fondo no se puede
+   * heredar: tiene que ser opaco o se ve la tienda a través. Antes era `#fff`
+   * fijo, que en un tema oscuro es un rectángulo blanco con texto claro encima.
+   *
+   * Se sube por los ancestros hasta encontrar el primero con fondo opaco, que
+   * es lo que el comprador está viendo detrás del panel.
+   */
+  function detectarFondoDelPanel() {
+    var e = document.body;
+    while (e) {
+      var c = window.getComputedStyle(e).backgroundColor;
+      if (!esTransparente(c)) {
+        document.documentElement.style.setProperty("--lovelist-panel-fondo", c);
+        return;
+      }
+      e = e.parentElement;
+    }
+  }
+
+  /**
+   * Un botón de verdad del tema, para copiarle el estilo.
+   *
+   * Se exige texto: un botón de solo ícono tiene padding cuadrado y copiarlo
+   * deja los nuestros deformes. Y se exige tamaño y visibilidad, porque un
+   * botón dentro de un panel plegado mide cero y su estilo no dice nada.
+   */
+  var SELECTORES_BOTON = [
+    'form[action*="/cart/add"] [type="submit"]',
+    ".product-form__submit",
+    ".btn--primary",
+    ".button--primary",
+    ".btn",
+    ".button",
+    'button[type="submit"]',
+  ];
+
+  function botonDelTema() {
+    for (var i = 0; i < SELECTORES_BOTON.length; i++) {
+      var candidatos = todos(SELECTORES_BOTON[i]);
+      for (var j = 0; j < candidatos.length; j++) {
+        var e = candidatos[j];
+        if (String(e.className).indexOf("lovelist-") >= 0) continue;
+        if (e.closest("[data-lovelist-ui], .lovelist-pagina")) continue;
+        if ((e.textContent || "").trim().length < 3) continue;
+        var r = e.getBoundingClientRect();
+        if (r.width < 60 || r.height < 20) continue;
+        if (!esVisible(e)) continue;
+        return e;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Copia el estilo computado de un botón del tema a variables CSS.
+   *
+   * Se lee el estilo **computado** y no las variables del tema a propósito: es
+   * la trampa de 2.4-bis. Dawn guarda `--color-button` como tres números
+   * sueltos para meterlos en `rgb()`, y eso es una convención suya, no un
+   * estándar; adivinar el formato de una variable ajena es el bug que estamos
+   * arreglando. `getComputedStyle` devuelve siempre un color ya resuelto.
+   */
+  function detectarEstiloDeBoton() {
+    var b = botonDelTema();
+    if (!b) return false;
+
+    var c = window.getComputedStyle(b);
+    var raiz = document.documentElement.style;
+    function poner(nombre, valor) {
+      if (valor) raiz.setProperty("--lovelist-btn-" + nombre, valor);
+    }
+
+    poner("familia", c.fontFamily);
+    poner("tamano", c.fontSize);
+    poner("peso", c.fontWeight);
+    poner("espaciado", c.letterSpacing);
+    poner("caja", c.textTransform);
+    poner(
+      "padding",
+      c.paddingTop + " " + c.paddingRight + " " + c.paddingBottom + " " + c.paddingLeft,
+    );
+    poner("radio", c.borderTopLeftRadius);
+    poner("borde", c.borderTopWidth + " " + c.borderTopStyle + " " + c.borderTopColor);
+
+    // El alto va como `min-height` y no como `height`: si el texto de un botón
+    // nuestro es más largo y envuelve, tiene que poder crecer.
+    if (parseFloat(c.height) > 0) poner("alto", c.height);
+
+    // Un botón del tema sin relleno sirve como referencia de forma, pero no de
+    // color: copiar "transparente" dejaría el principal sin énfasis. En ese
+    // caso el CSS cae al fondo derivado de currentColor.
+    if (!esTransparente(c.backgroundColor)) {
+      poner("fondo", c.backgroundColor);
+      poner("texto", c.color);
+    }
+    return true;
+  }
+
+  // Se calcula una sola vez por carga: "" si no hay clase que resuelva.
+  var claseValidada = null;
+  var hayEstiloDetectado = false;
+
+  function resolverEstiloDeBoton() {
     var clase = (cfg.claseBoton || "").trim();
-    if (!clase) return;
+    claseValidada = clase && claseResuelve(clase) ? clase : "";
+    // La detección solo hace falta si el merchant no configuró una clase que
+    // funcione. Si la configuró, manda la suya: es una decisión explícita.
+    if (!claseValidada) hayEstiloDetectado = detectarEstiloDeBoton();
+  }
+
+  function aplicarClaseDelTema(raiz) {
+    if (claseValidada === null) resolverEstiloDeBoton();
+    if (!claseValidada && !hayEstiloDetectado) return;
 
     todos(
       ".lovelist-boton-principal, .lovelist-boton-secundario, .lovelist-boton-carrito",
       raiz,
     ).forEach(function (b) {
-      if (b.classList.contains("lovelist-boton-tema")) return;
-      b.classList.add("lovelist-boton-tema");
-      clase.split(/\s+/).forEach(function (c) {
-        if (c) b.classList.add(c);
-      });
+      if (claseValidada) {
+        if (b.classList.contains("lovelist-boton-tema")) return;
+        b.classList.add("lovelist-boton-tema");
+        claseValidada.split(/\s+/).forEach(function (c) {
+          if (c) b.classList.add(c);
+        });
+      } else {
+        b.classList.add("lovelist-boton-detectado");
+      }
     });
   }
 
@@ -1196,6 +1366,7 @@
     if (carrito && carrito.parentElement) {
       contador.classList.add("lovelist-contador-header");
       carrito.parentElement.insertBefore(contador, carrito);
+      igualarIconoAlVecino(contador, carrito);
     }
 
     // Comprobamos que de verdad se vea. Un tema puede tener el carrito dentro
@@ -1210,6 +1381,26 @@
     }
 
     pintarContador();
+  }
+
+  /**
+   * Le da a nuestro ícono el tamaño del ícono que el tema ya tiene al lado.
+   *
+   * Es la forma general de "que se vea como los demás": en vez de adivinar una
+   * medida o leer una variable del tema, se mide el vecino. Si no hay vecino
+   * medible, el CSS se queda con su respaldo en `em`.
+   *
+   * Se toma el lado mayor a propósito: si el ícono del tema estuviera aplastado
+   * por su propio layout, copiar el lado corto propagaría la deformación.
+   */
+  function igualarIconoAlVecino(propio, vecino) {
+    var ref = vecino.querySelector("svg, img");
+    if (!ref) return;
+    var r = ref.getBoundingClientRect();
+    var lado = Math.round(Math.max(r.width, r.height));
+    if (lado > 0) {
+      propio.style.setProperty("--lovelist-icono-tamano", lado + "px");
+    }
   }
 
   function esVisible(el) {
@@ -1298,7 +1489,23 @@
   }
 
   function abrirDrawer() {
+    var recienCreado = !drawer;
     construirDrawer();
+
+    // La transición del panel está declarada en el CSS desde siempre y nunca
+    // llegaba a existir. En la primera apertura de cada carga de página el
+    // elemento se insertaba y se le agregaba la clase en la misma tarea, así
+    // que el navegador nunca calculaba el estilo de partida —`translateX(100%)`—
+    // y sin estado inicial no hay nada que animar: medido, cero transiciones
+    // creadas. El panel aparecía de golpe.
+    //
+    // Leer una propiedad de layout fuerza el cálculo ahí mismo. A partir de la
+    // segunda apertura el elemento ya está calculado y esto no hace nada.
+    if (recienCreado) {
+      var panel = drawer.querySelector(".lovelist-drawer-panel");
+      if (panel) void panel.offsetWidth;
+    }
+
     drawer.classList.add("lovelist-drawer-abierto");
     document.addEventListener("keydown", teclaEscape);
     var cerrar = drawer.querySelector(".lovelist-drawer-cerrar");
@@ -1766,6 +1973,11 @@
           compartirLista(compartir.getAttribute("data-lovelist-compartir-lista"));
         }
       });
+
+      // Lo que se le copia al tema se lee una sola vez, acá, con el DOM ya
+      // armado y antes de pintar nada nuestro.
+      detectarFondoDelPanel();
+      resolverEstiloDeBoton();
 
       montarContador();
       montarPagina();

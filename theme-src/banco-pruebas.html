@@ -42,9 +42,23 @@
   </header-drawer>
   <a href="https://tienda.test/cart" id="cart-invisible" style="visibility:hidden">Carrito oculto por visibility</a>
   <div class="header__icons">
-    <a href="/cart" id="cart-bueno" class="header__icon--cart">Carrito</a>
+    <!-- El enlace bueno trae un svg, como cualquier tema real: es lo que
+         `enlaceDelCarrito` usa para distinguir el grupo de iconos de una
+         entrada de texto del menu, y lo que `igualarIconoAlVecino` mide para
+         darle a nuestro icono el tamano de los de al lado. -->
+    <a href="/cart" id="cart-bueno" class="header__icon--cart" aria-label="Carrito">
+      <svg class="icono-tema" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h14l-1.5 9H4.5z"/></svg>
+    </a>
   </div>
 </header>
+
+<!-- Un boton de verdad del tema, que es de donde la app copia el estilo cuando
+     el merchant no configuro ninguna clase. Sin esto en el DOM el banco no
+     puede probar la deteccion, que es justo lo que reemplaza al default
+     "button" que llego roto a un cliente real. -->
+<form action="/cart/add" method="post" id="form-tema">
+  <button type="submit" class="btn">Anadir al carrito</button>
+</form>
 
 <main>
   <ul id="dawn">
@@ -141,6 +155,45 @@
   var NAVEGA = SIN_DRAWER || SECCIONES_NULAS;
   // Configuracion del merchant cambiada desde el app embed.
   var CONFIG_ALT = /[?&]config-alt/.test(location.search);
+  // Un tema que NO es Dawn. El banco simulaba Dawn y solo Dawn, asi que fue
+  // ciego a los cuatro fallos que aparecieron en Miniatur:
+  //
+  //   - `html { font-size: 62.5% }`, o sea 1rem = 10px. Todo el drawer estaba
+  //     en rem y renderizaba al 62,5%: el titulo a 10,5px, el precio a 8,5px.
+  //   - la clase de boton es `.btn`, no `.button`. Con el default "button"
+  //     agregabamos una clase inerte y ademas apagabamos la nuestra: texto plano.
+  //   - el header dimensiona sus iconos desde el contenedor, asi que nuestro
+  //     svg se aplastaba a 7px de ancho por flex-shrink.
+  //   - la primera apertura del drawer no animaba.
+  //
+  // Ninguna de las cuatro cosas es rara: es la familia Horizon entera, que es
+  // lo que Shopify le da hoy a una tienda nueva. Correr con `&pagina`.
+  var TEMA_AJENO = /[?&]tema-ajeno/.test(location.search);
+  if (TEMA_AJENO) {
+    var estiloTema = document.createElement("style");
+    estiloTema.textContent = [
+      "html { font-size: 62.5%; }",
+      "body { font-size: 1.4rem; }",
+      // El tema define .btn, NO .button. Es la diferencia que nos rompio.
+      ".btn { display:inline-flex; align-items:center; justify-content:center;",
+      "  height: 5rem; padding: 1rem 2.4rem; border-radius: 0.8rem;",
+      "  border: 0.1rem solid rgb(20,20,20); background-color: rgb(20,20,20);",
+      "  color: rgb(255,255,255); font-weight: 600; font-size: 1.4rem; }",
+      // Y dimensiona los iconos del header desde el contenedor, como Horizon.
+      ".header__icons { --header-icon-size: 3.6rem; display:flex; align-items:center; }",
+      ".header__icons > :is(a, button) { width: var(--header-icon-size);",
+      "  height: var(--header-icon-size); display:inline-flex; align-items:center;",
+      "  justify-content:center; }",
+      ".header__icons .icono-tema { width: 2rem; height: 2rem; display:block; }",
+      // El reset global de medios, que casi cualquier tema trae. Sin esto el
+      // banco NO reproduce el corazon aplastado: el span que envuelve al svg
+      // encoge por flexbox, y es este `max-width` el que arrastra al svg
+      // detras. Sin las dos cosas juntas el bug no aparece, y la comprobacion
+      // pasaba sin probar nada.
+      "img, picture, video, canvas, svg { display: block; max-width: 100%; height: auto; }",
+    ].join("\n");
+    document.head.appendChild(estiloTema);
+  }
   // La lista alcanzo el limite de productos del plan. NO es un paywall: la app
   // funciona entera, lo unico que no se puede es agregar mas.
   var LISTA_LLENA = /[?&]lista-llena/.test(location.search);
@@ -370,7 +423,13 @@
     icono: CONFIG_ALT ? "estrella" : "corazon",
     rellenarAlGuardar: !CONFIG_ALT,
     mostrarContador: !CONFIG_ALT,
-    claseBoton: CONFIG_ALT ? "" : "button",
+    // Vacio es el default nuevo: significa "copiale el estilo al tema solo".
+    // En TEMA_AJENO se manda "button" a proposito, que es el valor viejo que
+    // quedo guardado en las tiendas que instalaron antes —Miniatur entre
+    // ellas— y que ese tema no define. Es el caso que llego roto a un cliente:
+    // la clase no resuelve, y lo que no puede pasar es que ademas apaguemos la
+    // nuestra y el boton quede como texto plano.
+    claseBoton: TEMA_AJENO ? "button" : "",
     textos: __TEXTOS__
   });
   document.head.appendChild(tagCfg);
@@ -571,14 +630,25 @@ window.__resultado = null;
         return { cond: ids.length === unicos.length && ids.length === 3,
                  extra: ids.join(",") }; });
 
-      ok(CONFIG_ALT
-        ? "sin clase configurada, los botones quedan con el estilo propio"
-        : "los botones llevan la clase de boton del tema", function () {
+      // Esta comprobacion antes exigia la clase literal del tema y por eso era
+      // ciega: en Miniatur la clase estaba puesta, no la definia nadie, y el
+      // boton salia como texto plano. La clase presente no prueba nada; lo que
+      // importa es de donde sale el estilo. Son tres caminos y hay que caer en
+      // uno, nunca en ninguno.
+      ok("los botones caen en alguno de los tres caminos de estilo", function () {
         var b = raiz.querySelector(".lovelist-boton-principal");
         if (!b) return { cond: false, extra: "no hay boton principal" };
-        var conTema = b.classList.contains("lovelist-boton-tema") &&
-                      b.classList.contains("button");
-        return { cond: CONFIG_ALT ? !conTema : conTema, extra: b.className }; });
+        var delTema = b.classList.contains("lovelist-boton-tema");
+        var detectado = b.classList.contains("lovelist-boton-detectado");
+        var propio = !delTema && !detectado;
+        // El estilo propio es un camino valido, pero solo si de verdad quedo
+        // puesto: es exactamente lo que fallaba.
+        var c = getComputedStyle(b);
+        var vestido = parseFloat(c.borderTopWidth) > 0 ||
+                      !/rgba\(0, 0, 0, 0\)|transparent/.test(c.backgroundColor);
+        return { cond: (delTema || detectado || propio) && vestido,
+                 extra: b.className + " | fondo " + c.backgroundColor +
+                        " borde " + c.borderTopWidth }; });
 
       ok("todos los botones tienen etiqueta", function () {
         var mudos = botonesDe(raiz).filter(function (b) { return !etiquetaDe(b); });
@@ -758,6 +828,81 @@ window.__resultado = null;
         out.push(SIN_DRAWER
           ? "-> sin panel del tema: ahora tiene que irse a /cart"
           : "-> el tema devolvio sections nulas: ahora tiene que irse a /cart");
+      }
+    // === TEMA AJENO: los cuatro fallos de Miniatur ===
+    // Cada comprobacion de aca corresponde a algo que se vio en la tienda de un
+    // cliente y que este banco daba en verde.
+    if (TEMA_AJENO) {
+      out.push("");
+      out.push("=== TEMA AJENO (raiz 62.5%, botones .btn, iconos del header) ===");
+
+      var refBtn = document.querySelector("#form-tema .btn");
+      var refFondo = getComputedStyle(refBtn).backgroundColor;
+
+      ok("nuestro boton NO queda como texto plano", function () {
+        var b = document.querySelector(".lovelist-boton-principal, .lovelist-boton-carrito");
+        if (!b) return { cond: false, extra: "no hay boton en pantalla" };
+        var c = getComputedStyle(b);
+        var tieneFondo = !/rgba\(0, 0, 0, 0\)|transparent/.test(c.backgroundColor);
+        var tieneBorde = parseFloat(c.borderTopWidth) > 0;
+        // 1px 6px es el padding por defecto del navegador para <button>: es
+        // exactamente lo que quedaba cuando `padding: revert` no tenia nada
+        // del tema que lo reemplazara.
+        var padDelNavegador = c.paddingTop === "1px" && c.paddingLeft === "6px";
+        return { cond: (tieneFondo || tieneBorde) && !padDelNavegador,
+                 extra: "fondo " + c.backgroundColor + " borde " + c.borderTopWidth +
+                        " padding " + c.paddingTop + " " + c.paddingLeft }; });
+
+      ok("el boton copio el relleno del boton del tema", function () {
+        var b = document.querySelector(".lovelist-boton-principal, .lovelist-boton-carrito");
+        var c = b ? getComputedStyle(b) : null;
+        return { cond: !!c && c.backgroundColor === refFondo,
+                 extra: "nuestro " + (c && c.backgroundColor) + " vs tema " + refFondo }; });
+
+      ok("el icono del contador no esta aplastado", function () {
+        var svg = document.querySelector(".lovelist-contador svg");
+        if (!svg) return { cond: false, extra: "no hay contador" };
+        var r = svg.getBoundingClientRect();
+        // El bug real: 7px de ancho por 18 de alto. Si los lados no se parecen,
+        // flexbox se comio el icono.
+        var proporcion = Math.min(r.width, r.height) / Math.max(r.width, r.height);
+        return { cond: proporcion > 0.9,
+                 extra: r.width.toFixed(1) + "x" + r.height.toFixed(1) }; });
+
+      ok("el icono mide lo mismo que el del tema al lado", function () {
+        var nuestro = document.querySelector(".lovelist-contador svg");
+        var suyo = document.querySelector("#cart-bueno .icono-tema");
+        if (!nuestro || !suyo) return { cond: false, extra: "falta alguno" };
+        var a = nuestro.getBoundingClientRect(), b2 = suyo.getBoundingClientRect();
+        return { cond: Math.abs(a.width - b2.width) <= 1,
+                 extra: "nuestro " + a.width.toFixed(1) + " vs tema " + b2.width.toFixed(1) }; });
+
+      // La PRIMERA apertura de la pagina, que es la unica que puede fallar: a
+      // partir de la segunda el elemento ya esta calculado y anima solo. Hay
+      // que capturar las transiciones en el mismo momento del clic.
+      document.querySelector(".lovelist-contador").click();
+      var panelDrawer = document.querySelector(".lovelist-drawer-panel");
+      var transiciones = panelDrawer && panelDrawer.getAnimations
+        ? panelDrawer.getAnimations().map(function (a) { return a.transitionProperty; })
+        : null;
+
+      ok("la primera apertura del drawer anima", function () {
+        if (transiciones === null) return { cond: false, extra: "sin getAnimations()" };
+        // El bug: appendChild y la clase en la misma tarea, sin que el navegador
+        // calcule el estilo de partida. Se median CERO transiciones creadas y
+        // el panel aparecia de golpe.
+        return { cond: transiciones.indexOf("transform") >= 0,
+                 extra: transiciones.length + " transiciones: " + transiciones.join(",") }; });
+
+      ok("el titulo del drawer no renderiza mas chico que el texto del tema", function () {
+        var t = document.querySelector(".lovelist-drawer-titulo");
+        if (!t) return { cond: false, extra: "el drawer no se construyo" };
+        var nuestro = parseFloat(getComputedStyle(t).fontSize);
+        var cuerpo = parseFloat(getComputedStyle(document.body).fontSize);
+        // Antes salia 10,5px contra un cuerpo de 14px, porque estaba en rem.
+        return { cond: nuestro >= cuerpo,
+                 extra: "titulo " + nuestro + "px vs cuerpo " + cuerpo + "px" }; });
+
       }
 
       out.push("");

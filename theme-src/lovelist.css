@@ -81,8 +81,8 @@
 
 .lovelist-corazon-tarjeta {
   position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
+  top: 0.5em;
+  right: 0.5em;
   z-index: 2;
   background: rgba(255, 255, 255, 0.9);
   color: #1a1a1a;
@@ -93,12 +93,36 @@
   background: #fff;
 }
 
-/* Contador */
+/* Contador
+   ---------------------------------------------------------------------------
+   El contador se inyecta como hermano del enlace al carrito, o sea dentro del
+   grupo de iconos del header. Muchos temas dimensionan ese grupo desde el
+   contenedor —Horizon y sus derivados hacen
+   `.header__buttons > :is(a, button) { width: var(--header-icon-size) }`—, asi
+   que nuestra caja la fija el tema y no nosotros. Eso esta bien: es
+   exactamente la herencia que queremos.
+
+   Lo que NO puede pasar es que el contenido no entre en esa caja. La version
+   anterior ponia el icono y el numero en linea, uno al lado del otro, con
+   padding: pedia unos 45px de ancho dentro de una caja de 36px, y flexbox
+   encogia lo que podia. El que se comia el recorte era el `svg` —flex-shrink
+   vale 1 por defecto—, asi que en Miniatur el corazon renderizaba **7px de
+   ancho por 18 de alto**: aplastado al 35%, al lado de tres iconos del tema de
+   20x20. Se leia como "nuestro icono es mas chico", y era otra cosa.
+
+   Ahora el numero sale del flujo —absoluto sobre el icono, que es lo que hace
+   cualquier tema con su contador de carrito— y el icono no encoge nunca. Con
+   eso el unico contenido en flujo es el svg, que entra en cualquier caja.
+
+   El tamano del icono lo toma de `--lovelist-icono-tamano`, que el JS calcula
+   midiendo el icono vecino del tema. Si no hay vecino que medir, el respaldo
+   en `em` deja el comportamiento de siempre. */
 .lovelist-contador {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.25em;
-  padding: 0.4em;
+  justify-content: center;
+  padding: 0;
   border: 0;
   background: transparent;
   color: currentColor;
@@ -108,35 +132,64 @@
   appearance: none;
 }
 
+/* El tamano vive en el SPAN que envuelve al svg, no en el svg, y es deliberado.
+
+   El flex item es el span: poner `flex: 0 0 auto` en el svg no hace nada,
+   porque el svg no es hijo directo del flex container. Y casi cualquier tema
+   trae un reset global de medios —Miniatur tiene
+   `img, picture, video, canvas, svg { max-width: 100% }`—, con lo cual el svg
+   sigue al span cuando el span encoge.
+
+   Esa era la cadena completa del corazon aplastado: caja de 36px impuesta por
+   el tema, span encogido por flexbox, y el `max-width` del reset arrastrando al
+   svg detras. Fijando el span y dejando el svg al 100% de el, no queda nada que
+   encoger. */
+.lovelist-contador-icono {
+  display: block;
+  flex: 0 0 auto;
+  width: var(--lovelist-icono-tamano, 1.35em);
+  height: var(--lovelist-icono-tamano, 1.35em);
+}
+
 .lovelist-contador svg {
-  width: 1.35em;
-  height: 1.35em;
+  width: 100%;
+  height: 100%;
   display: block;
 }
 
 .lovelist-contador-numero {
-  font-size: 0.75em;
-  min-width: 1.5em;
-  padding: 0.1em 0.35em;
+  position: absolute;
+  top: 0;
+  inset-inline-end: 0;
+  transform: translate(35%, -25%);
+  font-size: 0.7em;
+  line-height: 1.6;
+  min-width: 1.6em;
+  height: 1.6em;
+  padding: 0 0.3em;
+  box-sizing: border-box;
   border-radius: 999px;
-  background: #e0245e;
+  background: var(--lovelist-color-activo, #e0245e);
   color: #fff;
   text-align: center;
+  pointer-events: none;
 }
 
+/* En cero no compite con el icono: el comprador no tiene nada guardado y el
+   numero no es informacion, es ruido encima del corazon. */
 .lovelist-contador-vacio .lovelist-contador-numero {
-  background: #8a8a8a;
+  display: none;
 }
 
 .lovelist-contador-flotante {
   position: fixed;
-  right: 1rem;
-  bottom: 1rem;
+  right: 1em;
+  bottom: 1em;
   z-index: 2147483000;
   padding: 0.75em;
   border-radius: 999px;
-  background: #fff;
-  color: #1a1a1a;
+  background: var(--lovelist-panel-fondo, #fff);
+  color: inherit;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
 }
 
@@ -161,6 +214,17 @@
   background: rgba(0, 0, 0, 0.4);
 }
 
+/* El panel hereda tipografia y color del `body`, del que cuelga. El fondo no
+   se puede heredar —es `position: fixed` sobre la pagina y tiene que ser
+   opaco—, asi que lo trae `--lovelist-panel-fondo`, que el JS resuelve leyendo
+   el fondo computado del tema. El respaldo blanco solo actua si eso fallo.
+
+   Todas las medidas de aca para abajo van en `em`, no en `rem`. Un tema con
+   `html { font-size: 62.5% }` —Horizon, Pebble y toda esa familia— hace que
+   1rem valga 10px, y el drawer entero renderizaba al 62,5% de lo pensado: el
+   titulo salia a 10,5px y el precio a 8,5px, al lado de una miniatura que
+   estaba en px y no encogia. Con `em` el drawer sigue la escala del tema en
+   lugar de pelearse con su raiz. */
 .lovelist-drawer-panel {
   position: absolute;
   top: 0;
@@ -169,8 +233,8 @@
   width: min(400px, 100%);
   display: flex;
   flex-direction: column;
-  background: #fff;
-  color: #1a1a1a;
+  background: var(--lovelist-panel-fondo, #fff);
+  color: inherit;
   box-shadow: -2px 0 16px rgba(0, 0, 0, 0.2);
   transform: translateX(100%);
   transition: transform 0.22s ease;
@@ -184,37 +248,38 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid #e5e5e5;
+  gap: 1em;
+  padding: 0.9em 1.1em;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.28);
 }
 
 .lovelist-drawer-titulo {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: 1.15em;
   font-weight: 600;
+  line-height: 1.3;
 }
 
 .lovelist-drawer-cerrar {
   border: 0;
   background: transparent;
-  font-size: 1.6rem;
+  font-size: 1.5em;
   line-height: 1;
   cursor: pointer;
   color: inherit;
-  padding: 0 0.25rem;
+  padding: 0 0.25em;
 }
 
 .lovelist-drawer-cuerpo {
   flex: 1;
   overflow-y: auto;
-  padding: 0.5rem 1.25rem 1.25rem;
+  padding: 0.5em 1.1em 1.1em;
 }
 
 .lovelist-drawer-vacio {
-  padding: 2rem 0;
+  padding: 2em 0;
   text-align: center;
-  color: #6b6b6b;
+  opacity: 0.7;
   line-height: 1.5;
 }
 
@@ -227,16 +292,19 @@
 .lovelist-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 0;
-  border-bottom: 1px solid #efefef;
+  gap: 0.75em;
+  padding: 0.75em 0;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
 }
 
+/* La miniatura tambien va en em. Cuando estaba en px era lo unico del drawer
+   que no encogia con la raiz del tema, asi que en Miniatur quedaba una foto de
+   64px al lado de texto de 9px. La proporcion importa mas que el tamano. */
 .lovelist-item-medio {
-  width: 64px;
-  height: 64px;
-  flex: 0 0 64px;
-  background: #f4f4f4;
+  width: 4.5em;
+  height: 4.5em;
+  flex: 0 0 4.5em;
+  background: rgba(128, 128, 128, 0.12);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -253,11 +321,11 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.15em;
 }
 
 .lovelist-item-titulo {
-  font-size: 0.92rem;
+  font-size: 0.95em;
   line-height: 1.3;
   color: inherit;
   text-decoration: none;
@@ -275,42 +343,43 @@
 /* Dos favoritos del mismo producto con distinta variante se distinguen por
    esta linea. Sin ella se ven como dos filas identicas repetidas. */
 .lovelist-item-variante {
-  font-size: 0.8rem;
-  color: #6b6b6b;
+  font-size: 0.85em;
+  opacity: 0.7;
 }
 
 .lovelist-item-precio {
-  font-size: 0.85rem;
-  color: #4a4a4a;
+  font-size: 0.9em;
+  opacity: 0.85;
 }
 
 .lovelist-item-quitar {
   border: 0;
   background: transparent;
-  font-size: 1.3rem;
+  font-size: 1.25em;
   line-height: 1;
   cursor: pointer;
-  color: #6b6b6b;
-  padding: 0.25rem 0.4rem;
+  color: inherit;
+  opacity: 0.6;
+  padding: 0.25em 0.4em;
 }
 
 .lovelist-item-quitar:hover {
-  color: #1a1a1a;
+  opacity: 1;
 }
 
 /* Aviso de error */
 .lovelist-aviso {
   position: fixed;
   left: 50%;
-  bottom: 1.5rem;
-  transform: translate(-50%, 1rem);
+  bottom: 1.5em;
+  transform: translate(-50%, 1em);
   z-index: 2147483002;
-  max-width: min(420px, calc(100vw - 2rem));
-  padding: 0.75rem 1rem;
+  max-width: min(420px, calc(100vw - 2em));
+  padding: 0.75em 1em;
   border-radius: 6px;
   background: #1a1a1a;
   color: #fff;
-  font-size: 0.9rem;
+  font-size: 0.9em;
   line-height: 1.35;
   opacity: 0;
   visibility: hidden;
@@ -348,16 +417,16 @@
 .lovelist-pagina {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 2rem 1.25rem 3rem;
+  padding: 2em 1.25em 3em;
   color: inherit;
 }
 
 .lovelist-pagina-cabecera {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.5em;
 }
 
 .lovelist-pagina-etiqueta {
-  margin: 0 0 0.25rem;
+  margin: 0 0 0.25em;
   font-size: 0.8em;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -371,12 +440,12 @@
 }
 
 .lovelist-pagina-nota {
-  margin: 0.5rem 0 0;
+  margin: 0.5em 0 0;
   opacity: 0.75;
 }
 
 .lovelist-pagina-selector {
-  margin-top: 1rem;
+  margin-top: 1em;
 }
 
 .lovelist-selector {
@@ -392,13 +461,13 @@
 .lovelist-pagina-acciones {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
+  gap: 0.75em;
+  margin-bottom: 1.5em;
 }
 
 .lovelist-pagina-vacia,
 .lovelist-pagina-cargando {
-  padding: 3rem 0;
+  padding: 3em 0;
   text-align: center;
   line-height: 1.6;
   opacity: 0.8;
@@ -407,7 +476,7 @@
 .lovelist-grilla {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1.5rem;
+  gap: 1.5em;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -425,7 +494,7 @@
 .lovelist-tarjeta {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.5em;
 }
 
 .lovelist-tarjeta-datos {
@@ -455,7 +524,7 @@
 .lovelist-tarjeta-datos {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.35em;
   align-items: flex-start;
 }
 
@@ -534,10 +603,20 @@
   font-weight: 600;
 }
 
-/* Cuando el merchant configuro la clase de botón de su tema, la decoración
-   propia se corre a un lado: manda la del tema. Se apagan solo las
-   propiedades que pelean —fondo, borde, radio, peso— y se dejan las de
-   layout, que el tema no necesariamente trae. */
+/* Cuando manda el tema, la decoración propia se corre a un lado. Se apagan
+   solo las propiedades que pelean —fondo, borde, radio, peso— y se dejan las
+   de layout, que el tema no necesariamente trae.
+
+   ATENCIÓN: esta clase la pone el JS **solo después de comprobar que la clase
+   configurada de verdad resuelve a algo**. Antes se ponía siempre, sobre el
+   supuesto de que "agregar una clase que no existe no hace nada". Eso es
+   cierto para la clase agregada y falso para esta: en un tema sin `.button`
+   —Horizon, Pebble y toda esa familia usan `.btn`— quedaban apagadas las dos
+   cosas y el botón salía como texto plano. `padding: revert` caía al default
+   del navegador, `1px 6px`. Llegó así a un cliente real.
+
+   La regla que queda: nunca apagar lo propio sin haber confirmado que hay algo
+   que lo reemplace. */
 .lovelist-boton-principal.lovelist-boton-tema,
 .lovelist-boton-secundario.lovelist-boton-tema,
 .lovelist-boton-carrito.lovelist-boton-tema {
@@ -547,6 +626,51 @@
   color: inherit;
   font-weight: inherit;
   padding: revert;
+}
+
+/* Segundo camino, para el merchant que no configuró ninguna clase: el JS
+   busca un botón de verdad del tema, le lee el estilo computado y lo deja acá.
+
+   Se lee el estilo **computado** y no las variables del tema a propósito. Es
+   la trampa que ya nos mordió en 2.4-bis: Dawn guarda `--color-button` como
+   tres números sueltos para meterlos en `rgb()`, y eso es una convención suya,
+   no un estándar. `getComputedStyle` devuelve siempre un color resuelto, así
+   que nunca vemos el formato crudo de una variable ajena.
+
+   Cada `var()` trae su respaldo, así que si la detección no encontró nada las
+   declaraciones caen al estilo propio de Lovelist y el botón sigue siendo
+   legible. Lo que no se puede copiar es `:hover` / `:focus`: se quedan los
+   nuestros. */
+.lovelist-boton-principal.lovelist-boton-detectado,
+.lovelist-boton-secundario.lovelist-boton-detectado,
+.lovelist-boton-carrito.lovelist-boton-detectado {
+  font-family: var(--lovelist-btn-familia, inherit);
+  font-size: var(--lovelist-btn-tamano, inherit);
+  font-weight: var(--lovelist-btn-peso, 600);
+  letter-spacing: var(--lovelist-btn-espaciado, inherit);
+  text-transform: var(--lovelist-btn-caja, none);
+  padding: var(--lovelist-btn-padding, 0.6em 1.1em);
+  min-height: var(--lovelist-btn-alto, auto);
+  border-radius: var(--lovelist-btn-radio, 4px);
+  border: var(--lovelist-btn-borde, 1px solid currentColor);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lovelist-boton-principal.lovelist-boton-detectado,
+.lovelist-boton-carrito.lovelist-boton-detectado {
+  background: var(--lovelist-btn-fondo, color-mix(in srgb, currentColor 12%, transparent));
+  color: var(--lovelist-btn-texto, inherit);
+}
+
+/* El secundario copia la forma del botón del tema pero no su relleno: en una
+   fila de tres acciones —compartir, copiar, WhatsApp— tres botones sólidos del
+   color principal compiten entre sí y con el del carrito. */
+.lovelist-boton-secundario.lovelist-boton-detectado {
+  background: transparent;
+  color: inherit;
+  border: var(--lovelist-btn-borde, 1px solid currentColor);
 }
 
 .lovelist-boton-secundario {
@@ -576,40 +700,42 @@
   opacity: 1;
 }
 
+/* La caja y el campo toman el radio del tema cuando se pudo detectar, para no
+   ser lo único con esquinas ajenas en la página. */
 .lovelist-compartir {
-  margin-top: 2rem;
-  padding: 1rem;
+  margin-top: 2em;
+  padding: 1em;
   border: 1px solid rgba(128, 128, 128, 0.35);
-  border-radius: 6px;
+  border-radius: var(--lovelist-btn-radio, 6px);
 }
 
 .lovelist-compartir-url {
   width: 100%;
   padding: 0.6em 0.75em;
   border: 1px solid rgba(128, 128, 128, 0.4);
-  border-radius: 4px;
+  border-radius: var(--lovelist-btn-radio, 4px);
   background: transparent;
   color: inherit;
   font: inherit;
   font-size: 0.9em;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.75em;
 }
 
 .lovelist-compartir-botones {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6rem;
+  gap: 0.6em;
 }
 
 .lovelist-drawer-ver-todos {
   display: block;
-  margin-top: 1rem;
+  margin-top: 1em;
   text-align: center;
   color: inherit;
-  font-size: 0.92rem;
+  font-size: 0.95em;
 }
 
 .lovelist-item-agotado {
-  font-size: 0.8rem;
+  font-size: 0.85em;
   opacity: 0.7;
 }

@@ -6,6 +6,14 @@
 > Actualizada el 2026-08-10: los dos planes existen en el Partner Dashboard y
 > **la app se envió a revisión de Shopify**. Ver la sección 7 y
 > `BITACORA-2026-08-10.md`.
+> Actualizada el 2026-08-18: Shopify pausó la revisión por un 404 en el cambio
+> de plan; detrás había un fallo de cobro peor. Ver `BITACORA-2026-08-18.md`.
+> Actualizada el 2026-08-26: **la app está publicada e instalada en la tienda de
+> un cliente real (Miniatur)**. El primer tema que no es Dawn destapó cuatro
+> problemas de herencia de estilo, arreglados y desplegados en `lovelist-19`.
+> Ver `BITACORA-2026-08-26.md`. Ojo con dos números de este documento que ese
+> día quedaron viejos: el CLI ya no es 4.6.1 sino 4.7.0 (sección 2), y el bundle
+> del storefront ya no está al 68% sino al **84%** (sección 6).
 >
 > Este documento existe para que otra instancia, sin ningún contexto previo,
 > pueda retomar exactamente donde quedamos. No es un resumen: es el registro de

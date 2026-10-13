@@ -92,7 +92,14 @@
     "icono": {{ forma_icono | json }},
     "rellenarAlGuardar": {% if modo_icono == 'linea' %}false{% else %}true{% endif %},
     "mostrarContador": {% if block.settings.mostrar_contador == false %}false{% else %}true{% endif %},
-    "claseBoton": {{ block.settings.clase_boton | default: 'button' | json }},
+    {%- comment -%}
+      Sin `| default:`. El filtro de Liquid devuelve el valor por omisión para
+      nil, false **y cadena vacía**, así que con `| default: 'button'` el
+      merchant que borraba el campo seguía recibiendo "button": la salida que el
+      propio texto de ayuda prometía no existía. Vacío tiene que poder viajar
+      vacío, porque ahora significa "detectá el estilo solo".
+    {%- endcomment -%}
+    "claseBoton": {{ block.settings.clase_boton | json }},
     "textos": {
       "guardar": {{ block.settings.texto_guardar | default: d_guardar | json }},
       "guardado": {{ d_guardado | json }},
@@ -176,8 +183,8 @@
       "type": "text",
       "id": "clase_boton",
       "label": "Clase CSS de los botones de tu tema",
-      "info": "Hace que los botones de Lovelist se vean como los de tu tienda. \"button\" funciona en Dawn y en la mayoría de los temas. Vacío deja el estilo propio de Lovelist.",
-      "default": "button"
+      "info": "Dejalo vacío: Lovelist copia solo el estilo de los botones de tu tienda. Completalo únicamente si el resultado no te convence (\"button\" en Dawn, \"btn btn--primary\" en Horizon, Pebble y similares).",
+      "placeholder": "Se detecta solo"
     },
     { "type": "header", "content": "Textos: botón y panel" },
     { "type": "text", "id": "texto_guardar", "label": "Guardar", "default": "Guardar en favoritos" },
