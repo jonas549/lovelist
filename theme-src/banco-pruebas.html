@@ -137,6 +137,170 @@
   </section>
 </main>
 
+<!-- ============ TARJETAS DE HORIZON (modo ?horizon) ============
+     Marcado de snippets/product-card*.liquid del tema real de Miniatur
+     (Horizon/Pebble). Vive en un <template> y solo se agrega en su modo, para
+     no mover los conteos de los demas.
+
+     Lo que lo hace distinto de Dawn: cada tarjeta enlaza a su producto TRES
+     veces, desde contenedores distintos —un <a> vacio que la cubre entera
+     (`absolute inset-0`, hijo directo de <product-card>), el de la imagen y el
+     del titulo— y el boton de compra rapida trae un <svg>. Cada enlace subia
+     a un "contenedor mas bajo con imagen" distinto y cada uno recibia su
+     corazon: 3 por fila en "Combinacion de productos", y 2 apilados en el
+     mismo pixel en la grilla de coleccion, que por eso parecia andar.
+
+     Ademas: el "Elegir opciones" de un producto con varias opciones es OTRO
+     enlace a /products/ con un svg adentro. Aca va ANCHO a proposito (estilo
+     with_icon, md:w-full): antes solo se salvaba por ser angosto. -->
+<template id="tpl-horizon">
+  <style>
+    .hz product-card.product-card { position: relative; display: block; width: 460px; padding: 0; }
+    .hz .product-card__link { position: absolute; inset: 0; }
+    .hz .product-card__wrapper.flex { display: flex; align-items: center; gap: 12px; }
+    .hz .product-card--horizontal .product-card__media,
+    .hz .product-card--bought-together .product-card__media { width: 90px; flex-shrink: 0; }
+    .hz .product-card__content-wrap { display: flex; flex-grow: 1; align-items: center; gap: 8px; }
+    .hz .product-card__media { position: relative; }
+    .hz .product-card__actions { position: absolute; right: 8px; bottom: 8px; }
+    .hz .quick-add__button--choose { display: flex; width: 100%; }
+    .hz svg { width: 20px; height: 20px; }
+  </style>
+  <section id="combinacion" class="hz">
+    <div class="product-combine__combine-items"><carousel-slider><div class="swiper"><div class="swiper-wrapper" role="list">
+      <div class="swiper-slide" role="listitem"><ul role="list">
+        <li><product-card class="product-card product-card--horizontal">
+          <a href="/products/hz-plato?variant=1" class="product-card__link absolute inset-0" aria-label="Plato"></a>
+          <div class="product-card__wrapper flex">
+            <div class="product-card__media"><a href="/products/hz-plato?variant=1" tabindex="-1"><div class="media"><img alt=""></div></a></div>
+            <div class="product-card__content-wrap">
+              <div class="product-card__content">
+                <a class="product-card__title" href="/products/hz-plato"><span>Plato</span></a>
+                <product-price class="product-card__price"><span class="price">$12.990</span></product-price>
+              </div>
+              <div class="product-card__action"><quick-add-component class="quick-add quick-add--combine"><product-form-component data-product-id="5001"><form action="/cart/add">
+                <button class="btn btn--primary quick-add__button btn--icon-only" type="submit" aria-label="Agregar"><span class="icon icon--cart"><svg viewBox="0 0 20 20"><path d="M3 5h14l-1.5 9H4.5z"/></svg></span></button>
+              </form></product-form-component></quick-add-component></div>
+            </div>
+          </div>
+        </product-card></li>
+        <li><product-card class="product-card product-card--horizontal">
+          <a href="/products/hz-taza?variant=2" class="product-card__link absolute inset-0" aria-label="Taza"></a>
+          <div class="product-card__wrapper flex">
+            <div class="product-card__media"><a href="/products/hz-taza?variant=2" tabindex="-1"><div class="media"><img alt=""></div></a></div>
+            <div class="product-card__content-wrap">
+              <div class="product-card__content">
+                <a class="product-card__title" href="/products/hz-taza"><span>Taza</span></a>
+                <product-price class="product-card__price"><span class="price">$8.990</span></product-price>
+              </div>
+              <div class="product-card__action"><quick-add-component class="quick-add quick-add--combine"><product-form-component data-product-id="5002"><form action="/cart/add">
+                <a class="btn btn--primary quick-add__button quick-add__button--choose btn--icon-only" href="/products/hz-taza" aria-label="Elegir opciones"><span class="icon icon--cart"><svg viewBox="0 0 20 20"><path d="M3 5h14l-1.5 9H4.5z"/></svg></span></a>
+              </form></product-form-component></quick-add-component></div>
+            </div>
+          </div>
+        </product-card></li>
+      </ul></div>
+    </div></div></carousel-slider></div>
+  </section>
+
+  <section id="coleccion-horizon" class="hz"><ul class="grid">
+    <li class="grid__item"><product-card class="product-card product-card--standard product-card--style-standard">
+      <a href="/products/hz-manta?variant=3" class="product-card__link absolute inset-0" aria-label="Manta"></a>
+      <div class="product-card__wrapper product-card--has-quick-add">
+        <div class="product-card__media">
+          <a href="/products/hz-manta?variant=3" tabindex="-1"><div class="media"><img alt=""></div><div class="media"><img alt=""></div></a>
+          <div class="product-card__actions"><quick-add-component class="quick-add quick-add--combine"><product-form-component data-product-id="5003"><form action="/cart/add">
+            <a class="btn btn--primary quick-add__button quick-add__button--choose btn--icon-solid-desktop md:w-full" href="/products/hz-manta" aria-label="Elegir opciones"><span class="btn__text">Elegir opciones</span><span class="icon icon--cart"><svg viewBox="0 0 20 20"><path d="M3 5h14l-1.5 9H4.5z"/></svg></span></a>
+          </form></product-form-component></quick-add-component></div>
+        </div>
+        <div class="product-card__content"><div class="product-card__content--wrapper">
+          <a class="product-card__title" href="/products/hz-manta"><span>Manta</span></a>
+          <product-price class="product-card__price"><span class="price">$24.990</span></product-price>
+        </div></div>
+      </div>
+    </product-card></li>
+    <li class="grid__item"><product-card class="product-card product-card--standard product-card--style-card">
+      <a href="/products/hz-cojin?variant=4" class="product-card__link absolute inset-0" aria-label="Cojin"></a>
+      <div class="product-card__wrapper product-card--has-quick-add">
+        <div class="product-card__media">
+          <a href="/products/hz-cojin?variant=4" tabindex="-1"><div class="media"><img alt=""></div></a>
+          <div class="product-card__actions"><quick-add-component class="quick-add quick-add--view"><form action="/cart/add">
+            <button class="btn btn--icon-only quick-add__button--view" type="button" aria-label="Vista rapida"><span class="icon icon--search"><svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="6"/></svg></span></button>
+          </form></quick-add-component></div>
+        </div>
+        <div class="product-card__content">
+          <div class="product-card__content--wrapper">
+            <a class="product-card__title" href="/products/hz-cojin"><span>Cojin</span></a>
+            <product-price class="product-card__price"><span class="price">$15.990</span></product-price>
+          </div>
+          <div class="product-card__quick-add"><quick-add-component class="quick-add quick-add--combine"><product-form-component data-product-id="5004"><form action="/cart/add">
+            <button class="btn btn--primary quick-add__button btn--icon-only" type="submit" aria-label="Agregar"><span class="icon icon--cart"><svg viewBox="0 0 20 20"><path d="M3 5h14l-1.5 9H4.5z"/></svg></span></button>
+          </form></product-form-component></quick-add-component></div>
+        </div>
+      </div>
+    </product-card></li>
+  </ul></section>
+
+  <!-- snippets/cart-drawer-summary.liquid: las recomendaciones del drawer del
+       carrito usan la MISMA tarjeta horizontal. Es una de las secciones que el
+       diagnostico daba por cubierta solo por leer el marcado. -->
+  <cart-drawer-component id="drawer-reco" class="hz"><div class="cart-drawer__recommendation-wrapper"><div class="swiper-wrapper">
+    <div class="cart-drawer__recommendation-product swiper-slide"><product-card class="product-card product-card--horizontal">
+      <a href="/products/hz-babero?variant=5" class="product-card__link absolute inset-0" aria-label="Babero"></a>
+      <div class="product-card__wrapper flex">
+        <div class="product-card__media"><a href="/products/hz-babero?variant=5" tabindex="-1"><div class="media"><img alt=""></div></a></div>
+        <div class="product-card__content-wrap">
+          <div class="product-card__content">
+            <a class="product-card__title" href="/products/hz-babero"><span>Babero</span></a>
+            <product-price class="product-card__price"><span class="price">$6.990</span></product-price>
+          </div>
+          <div class="product-card__action"><quick-add-component class="quick-add quick-add--combine"><product-form-component data-product-id="5005"><form action="/cart/add">
+            <button class="btn btn--primary quick-add__button btn--icon-only" type="submit" aria-label="Agregar"><span class="icon icon--cart"><svg viewBox="0 0 20 20"><path d="M3 5h14l-1.5 9H4.5z"/></svg></span></button>
+          </form></product-form-component></quick-add-component></div>
+        </div>
+      </div>
+    </product-card></div>
+    <div class="cart-drawer__recommendation-product swiper-slide"><product-card class="product-card product-card--horizontal">
+      <a href="/products/hz-chupetero?variant=6" class="product-card__link absolute inset-0" aria-label="Chupetero"></a>
+      <div class="product-card__wrapper flex">
+        <div class="product-card__media"><a href="/products/hz-chupetero?variant=6" tabindex="-1"><div class="media"><img alt=""></div></a></div>
+        <div class="product-card__content-wrap">
+          <div class="product-card__content">
+            <a class="product-card__title" href="/products/hz-chupetero"><span>Chupetero</span></a>
+            <product-price class="product-card__price"><span class="price">$4.990</span></product-price>
+          </div>
+        </div>
+      </div>
+    </product-card></div>
+  </div></div></cart-drawer-component>
+
+  <!-- El mismo producto en dos diapositivas, como cuando un carrusel con loop
+       clona las de los bordes. Son dos tarjetas: cada una lleva su corazon.
+       Esto cuida que deduplicar por producto no se pase y deje una sin nada. -->
+  <section id="repetido" class="hz"><div class="swiper-wrapper">
+    <div class="swiper-slide" id="repetido-1"><product-card class="product-card product-card--horizontal">
+      <a href="/products/hz-sonajero?variant=7" class="product-card__link absolute inset-0" aria-label="Sonajero"></a>
+      <div class="product-card__wrapper flex">
+        <div class="product-card__media"><a href="/products/hz-sonajero?variant=7" tabindex="-1"><div class="media"><img alt=""></div></a></div>
+        <div class="product-card__content-wrap"><div class="product-card__content">
+          <a class="product-card__title" href="/products/hz-sonajero"><span>Sonajero</span></a>
+          <product-price class="product-card__price"><span class="price">$3.990</span></product-price>
+        </div></div>
+      </div>
+    </product-card></div>
+    <div class="swiper-slide" id="repetido-2"><product-card class="product-card product-card--horizontal">
+      <a href="/products/hz-sonajero?variant=7" class="product-card__link absolute inset-0" aria-label="Sonajero"></a>
+      <div class="product-card__wrapper flex">
+        <div class="product-card__media"><a href="/products/hz-sonajero?variant=7" tabindex="-1"><div class="media"><img alt=""></div></a></div>
+        <div class="product-card__content-wrap"><div class="product-card__content">
+          <a class="product-card__title" href="/products/hz-sonajero"><span>Sonajero</span></a>
+          <product-price class="product-card__price"><span class="price">$3.990</span></product-price>
+        </div></div>
+      </div>
+    </product-card></div>
+  </div></section>
+</template>
+
 <pre id="resultados">corriendo…</pre>
 
 <script>
@@ -197,6 +361,13 @@
   // La lista alcanzo el limite de productos del plan. NO es un paywall: la app
   // funciona entera, lo unico que no se puede es agregar mas.
   var LISTA_LLENA = /[?&]lista-llena/.test(location.search);
+  // Tarjetas de Horizon: varios enlaces al mismo producto por tarjeta. Se
+  // agregan antes de que cargue lovelist.js, como las sirve el tema.
+  var HORIZON = /[?&]horizon/.test(location.search);
+  if (HORIZON) {
+    document.querySelector("main").appendChild(
+      document.getElementById("tpl-horizon").content.cloneNode(true));
+  }
   var ANON_SEMBRADO = "11111111-2222-4333-8444-555555555555";
   if (LOGUEADO || MERGE_FALLA) {
     // Como si hubiera guardado cosas de invitado y recien ahora iniciara sesion.
@@ -952,6 +1123,51 @@ window.__resultado = null;
 
       ok("cero errores de JS", function () {
         return { cond: window.__errores.length === 0, extra: JSON.stringify(window.__errores) }; });
+
+      out.push("");
+      out.push(fallos === 0 ? "TODO OK" : fallos + " FALLOS");
+      document.getElementById("resultados").textContent = out.join("\n");
+      window.__resultado = out.join("\n");
+      return;
+    }
+
+    if (HORIZON) {
+      out.push("=== TARJETAS DE HORIZON (varios enlaces al mismo producto) ===");
+
+      // Uno por tarjeta, y sobre la imagen: es el unico de los tres que el
+      // comprador espera ver, y el que ya se veia bien en la tienda.
+      function unoSobreLaImagen(nombre, sel) {
+        var tarjetas = document.querySelectorAll(sel + " product-card");
+        ok(nombre, function () {
+          var malas = [].filter.call(tarjetas, function (c) {
+            var bs = c.querySelectorAll("[data-lovelist-boton]");
+            return bs.length !== 1 || !bs[0].closest(".product-card__media");
+          }).map(function (c) {
+            var bs = [].map.call(c.querySelectorAll("[data-lovelist-boton]"), function (b) {
+              return b.parentElement.className.split(" ")[0] || b.parentElement.tagName; });
+            return c.querySelector(".product-card__title").textContent + "=" + bs.length + "[" + bs.join(",") + "]";
+          });
+          return { cond: tarjetas.length > 0 && malas.length === 0, extra: tarjetas.length + " tarjetas; " + malas.join(" ") };
+        });
+      }
+      unoSobreLaImagen("combinacion de productos: 1 por fila, sobre la imagen", "#combinacion");
+      unoSobreLaImagen("grilla de coleccion (estilo standard y card): 1 por tarjeta", "#coleccion-horizon");
+      unoSobreLaImagen("recomendados del drawer del carrito: 1 por tarjeta", "#drawer-reco");
+      unoSobreLaImagen("mismo producto en dos diapositivas: 1 en CADA una", "#repetido");
+
+      ok("los 'Elegir opciones' (anchos) no reciben corazon", function () {
+        var m = document.querySelectorAll(".quick-add [data-lovelist-boton]").length;
+        return { cond: m === 0, extra: m }; });
+
+      ok("Dawn sigue igual en la misma pagina: cada li recibe 1", function () {
+        return { cond: n("#dawn li:nth-child(1)") === 1 && n("#dawn li:nth-child(2)") === 1 && n("#doble") === 1,
+                 extra: n("#dawn li:nth-child(1)") + "/" + n("#dawn li:nth-child(2)") + "/" + n("#doble") }; });
+
+      document.body.appendChild(document.createElement("span"));
+      await esperar(400);
+      ok("reescanear NO agrega ninguno", function () {
+        var m = document.querySelectorAll(".hz [data-lovelist-boton]").length;
+        return { cond: m === 8, extra: m + " (esperados 8)" }; });
 
       out.push("");
       out.push(fallos === 0 ? "TODO OK" : fallos + " FALLOS");

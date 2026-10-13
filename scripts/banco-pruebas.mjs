@@ -32,6 +32,14 @@
  *                            daba todos en verde porque simulaba Dawn y solo
  *                            Dawn. **Hay que correrlo con `&pagina`**: los
  *                            botones de la app solo existen en esa pantalla.
+ *   /?horizon                 tarjetas de la familia Horizon, que enlazan su
+ *                            producto tres veces (un <a> vacío que cubre la
+ *                            tarjeta, la imagen y el título) y traen un <svg>
+ *                            en la compra rápida. Cada enlace inyectaba su
+ *                            propio corazón: 3 por fila en "Combinación de
+ *                            productos" de Miniatur. Modela esa sección, la
+ *                            grilla, las recomendaciones del drawer y un
+ *                            carrusel con el mismo producto repetido.
  *
  * Los dos que llevan `sin-drawer` y `secciones-nulas` terminan navegando a
  * propósito: aterrizar en /cart ES el resultado. La página de destino la sirve
@@ -46,6 +54,7 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import process from "node:process";
 
 const RAIZ = new URL("../", import.meta.url);
 const ruta = (p) => fileURLToPath(new URL(p, RAIZ));

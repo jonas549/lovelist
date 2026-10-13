@@ -1272,6 +1272,57 @@
     return PRECIO.test((tarjeta.textContent || "").slice(0, 500));
   }
 
+  /**
+   * El bloque de un producto: el ancestro MÁS ALTO que sigue enlazando un solo
+   * producto. Es la unidad para "un corazón por producto".
+   *
+   * Hace falta además de contenedorDeTarjeta porque ese elige DÓNDE va el
+   * corazón, y lo hace desde cada enlace por separado. En Horizon cada tarjeta
+   * enlaza su producto tres veces desde contenedores distintos —un <a> vacío
+   * que la cubre entera, la imagen y el título—, cada enlace llegaba a un
+   * "contenedor más bajo con imagen" distinto (el svg de la compra rápida
+   * cuenta como imagen) y cada uno ponía su corazón: tres por fila. Los tres
+   * enlaces, en cambio, comparten este bloque, sea cual sea el tema.
+   *
+   * Tampoco sube a donde haya dos enlaces con foto de ese producto: eso ya son
+   * dos tarjetas del mismo producto —un carrusel con loop clona diapositivas—
+   * y cada una lleva su corazón.
+   */
+  function bloqueDelProducto(enlace, handle) {
+    var nodo = enlace;
+    var padre;
+    while (
+      (padre = nodo.parentElement) &&
+      !CORTE[padre.tagName] &&
+      handlesDistintos(padre) === 1 &&
+      fotosEnlazadas(padre, handle) < 2
+    ) {
+      nodo = padre;
+    }
+    return nodo;
+  }
+
+  function fotosEnlazadas(nodo, handle) {
+    var n = 0;
+    var enlaces = nodo.querySelectorAll('a[href*="/products/"]');
+    for (var i = 0; i < enlaces.length && n < 2; i++) {
+      if (handleDeUrl(enlaces[i].getAttribute("href")) === handle && tieneFoto(enlaces[i])) n++;
+    }
+    return n;
+  }
+
+  function hayCorazonDe(bloque, handle) {
+    var bs = bloque.querySelectorAll("[data-lovelist-handle]");
+    for (var i = 0; i < bs.length; i++) {
+      if (bs[i].getAttribute("data-lovelist-handle") === handle) return true;
+    }
+    return false;
+  }
+
+  function tieneFoto(nodo) {
+    return !!nodo.querySelector("img, picture");
+  }
+
   function inyectable(enlace) {
     if (!enlace.closest) return false;
     // Nuestra propia interfaz, y los menús: ahí un corazón no tiene sentido.
@@ -1295,6 +1346,18 @@
       return;
     }
 
+    // Primero los enlaces que envuelven una foto: de todos los de una tarjeta,
+    // ese es el que deja el corazón sobre la imagen. Si fuera primero el <a>
+    // vacío que cubre la tarjeta, el corazón quedaría en la esquina de la
+    // tarjeta entera, que en una fila horizontal es la punta opuesta.
+    // Es `img, picture` y no `tieneImagen` a propósito: un "Elegir opciones"
+    // también es un enlace al producto con un svg adentro.
+    enlaces = enlaces.filter(tieneFoto).concat(
+      enlaces.filter(function (a) {
+        return !tieneFoto(a);
+      }),
+    );
+
     enlaces.forEach(function (a) {
       try {
         if (!inyectable(a)) return;
@@ -1302,6 +1365,9 @@
         var handle = handleDeUrl(a.getAttribute("href"));
         if (!handle) return;
         if (handleActual && handle === handleActual) return;
+
+        // Un corazón por producto y por bloque, venga del enlace que venga.
+        if (hayCorazonDe(bloqueDelProducto(a, handle), handle)) return;
 
         var tarjeta = contenedorDeTarjeta(a);
         if (!tarjeta) return;
